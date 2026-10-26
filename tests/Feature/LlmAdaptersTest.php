@@ -200,4 +200,94 @@ class LlmAdaptersTest extends TestCase
             'completion_tokens' => 25,
         ]);
     }
+
+    public function test_gemini_adapter_sanitizes_openai_base_url_if_present()
+    {
+        $provider = LlmProvider::create([
+            'name' => 'Mistaken Base URL Gemini',
+            'provider_type' => 'gemini',
+            'api_key' => 'gemini_test_key_live',
+            'model' => 'gemini-1.5-flash',
+            'base_url' => 'https://api.openai.com/v1',
+            'temperature' => 0.7,
+            'is_default' => false,
+            'is_active' => true,
+        ]);
+
+        Http::fake([
+            'https://generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [
+                    [
+                        'content' => [
+                            'parts' => [
+                                ['text' => 'Correctly routed to Gemini despite OpenAI base URL.'],
+                            ],
+                            'role' => 'model',
+                        ],
+                    ],
+                ],
+                'usageMetadata' => [
+                    'promptTokenCount' => 10,
+                    'candidatesTokenCount' => 10,
+                ],
+            ], 200),
+        ]);
+
+        $adapter = app(GeminiAdapter::class);
+        $response = $adapter->send($provider, 'system', [['role' => 'user', 'content' => 'hi']], []);
+
+        $this->assertFalse($response->isError());
+        $this->assertEquals('Correctly routed to Gemini despite OpenAI base URL.', $response->content);
+    }
+
+    public function test_admin_llm_provider_test_connection_routes_to_gemini()
+    {
+        $admin = User::where('role', User::ROLE_ADMIN)->first();
+        $provider = LlmProvider::create([
+            'name' => 'Production Gemini',
+            'provider_type' => 'gemini',
+            'api_key' => 'AIzaSyTestApiKeyForGemini',
+            'model' => 'gemini-1.5-flash',
+            'temperature' => 0.7,
+            'is_default' => true,
+            'is_active' => true,
+        ]);
+
+        Http::fake([
+            'https://generativelanguage.googleapis.com/v1beta/models?key=AIzaSyTestApiKeyForGemini' => Http::response([
+                'models' => [
+                    ['name' => 'models/gemini-1.5-flash'],
+                ],
+            ], 200),
+        ]);
+
+        $response = $this->actingAs($admin)->post("/admin/llm-providers/{$provider->id}/test");
+        $response->assertSessionHas('success');
+        $this->assertStringContainsString('Google Gemini', session('success'));
+    }
+
+    public function test_admin_llm_provider_store_clears_openai_base_url_for_gemini()
+    {
+        $admin = User::where('role', User::ROLE_ADMIN)->first();
+
+        $response = $this->actingAs($admin)->post('/admin/llm-providers', [
+            'name' => 'My Google Gemini 1.5',
+            'provider_type' => 'gemini',
+            'api_key' => 'AIzaSy1234567890',
+            'model' => 'gpt-4o', // Submitted accidentally from OpenAI default
+            'base_url' => 'https://api.openai.com/v1', // Submitted accidentally from OpenAI default
+            'temperature' => 0.7,
+            'is_default' => '1',
+            'is_active' => '1',
+        ]);
+
+        $response->assertRedirect('/admin/llm-providers');
+        $this->assertDatabaseHas('llm_providers', [
+            'name' => 'My Google Gemini 1.5',
+            'provider_type' => 'gemini',
+            'model' => 'gemini-1.5-flash', // Auto-corrected to gemini
+            'base_url' => null, // Auto-cleared OpenAI base URL
+            'is_default' => true,
+        ]);
+    }
 }

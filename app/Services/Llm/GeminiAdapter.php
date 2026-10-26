@@ -112,8 +112,14 @@ class GeminiAdapter implements LlmAdapterInterface
             ];
         }
 
-        $model = $provider->model ?: 'gemini-1.5-pro';
+        $model = $provider->model ?: 'gemini-1.5-flash';
+        if (str_contains(strtolower($model), 'gpt-')) {
+            $model = 'gemini-1.5-flash';
+        }
         $baseUrl = rtrim($provider->base_url ?: 'https://generativelanguage.googleapis.com', '/');
+        if (str_contains($baseUrl, 'api.openai.com')) {
+            $baseUrl = 'https://generativelanguage.googleapis.com';
+        }
         $endpoint = "{$baseUrl}/v1beta/models/{$model}:generateContent?key={$provider->api_key}";
 
         try {
