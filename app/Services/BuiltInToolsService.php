@@ -130,13 +130,18 @@ class BuiltInToolsService
             }
 
             if ($hasDocker) {
+                $dockerImage = (string) config('services.python_sandbox.docker_image', env('PYTHON_DOCKER_IMAGE', 'python:3.15-slim'));
+                if (preg_match('/^python\.(\d)/', $dockerImage)) {
+                    $dockerImage = preg_replace('/^python\./', 'python:', $dockerImage);
+                }
+
                 // Secure Docker container: no network access, read-only volume, auto-remove
                 $command = [
                     'docker', 'run', '--rm',
                     '--network', 'none',
                     '--memory', '256m',
                     '-v', "{$tempFile}:/app/script.py:ro",
-                    'python:3.10-slim',
+                    $dockerImage,
                     'python', '/app/script.py',
                 ];
             } else {

@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'python_sandbox' => [
+        'docker_image' => env('PYTHON_DOCKER_IMAGE', 'python:3.15-slim'),
+    ],
+
 ];
