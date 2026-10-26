@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ChatMessage;
 use App\Models\ChatSession;
+use App\Models\LlmProvider;
 use App\Services\AiAgentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -29,8 +30,9 @@ class ChatController extends Controller
             ->get();
 
         $activeSession = $sessions->first();
+        $activeProvider = LlmProvider::getDefault();
 
-        return view('chat.index', compact('sessions', 'activeSession'));
+        return view('chat.index', compact('sessions', 'activeSession', 'activeProvider'));
     }
 
     /**
@@ -48,8 +50,9 @@ class ChatController extends Controller
             ->get();
 
         $activeSession = $session;
+        $activeProvider = LlmProvider::getDefault();
 
-        return view('chat.index', compact('sessions', 'activeSession'));
+        return view('chat.index', compact('sessions', 'activeSession', 'activeProvider'));
     }
 
     /**

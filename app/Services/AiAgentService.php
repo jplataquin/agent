@@ -56,19 +56,38 @@ class AiAgentService
         $messages = [];
         $history = $session->messages()->orderBy('id', 'asc')->get();
 
+        $lastAssistantToolCalls = [];
+
         foreach ($history as $msg) {
             $entry = ['role' => $msg->role];
 
             if ($msg->role === 'tool') {
                 $entry['content'] = $msg->content ?? '';
-                $entry['tool_call_id'] = $msg->tool_call_id ?? 'call_1';
+                $entry['tool_call_id'] = $msg->tool_call_id ?? '';
+
+                // Resolve tool_name by finding matching tool_call in preceding assistant message
+                $toolName = null;
+                foreach ($lastAssistantToolCalls as $tc) {
+                    if (($tc['id'] ?? '') === $msg->tool_call_id) {
+                        $toolName = $tc['name'] ?? ($tc['function']['name'] ?? null);
+                        break;
+                    }
+                }
+                if (! $toolName && ! empty($lastAssistantToolCalls)) {
+                    $toolName = $lastAssistantToolCalls[0]['name'] ?? ($lastAssistantToolCalls[0]['function']['name'] ?? null);
+                }
+                $entry['tool_name'] = $toolName ?: 'mcp_tool';
             } elseif ($msg->role === 'assistant') {
                 $entry['content'] = $msg->content;
                 if (! empty($msg->tool_calls)) {
                     $entry['tool_calls'] = $msg->tool_calls;
+                    $lastAssistantToolCalls = $msg->tool_calls;
+                } else {
+                    $lastAssistantToolCalls = [];
                 }
             } else {
                 $entry['content'] = $msg->content ?? '';
+                $lastAssistantToolCalls = [];
             }
 
             $messages[] = $entry;
