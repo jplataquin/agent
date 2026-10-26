@@ -5,36 +5,50 @@
     /* Chat Layout */
     .chat-container {
         height: calc(100vh - 120px);
-        min-height: 520px;
-        display: flex;
+        min-height: 540px;
+        display: flex !important;
+        flex-direction: row !important;
         position: relative;
+        background: #ffffff;
+        border-radius: 16px;
+        border: 1px solid #e2e8f0;
+        overflow: hidden;
     }
     .chat-sidebar {
-        width: 310px;
-        min-width: 310px;
+        width: 290px;
+        min-width: 290px;
+        max-width: 290px;
+        height: 100%;
         background: #ffffff;
         border-right: 1px solid #e2e8f0;
-        display: flex;
-        flex-direction: column;
-        transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.25s cubic-bezier(0.4, 0, 0.2, 1), padding 0.25s ease, opacity 0.2s ease;
+        display: flex !important;
+        flex-direction: column !important;
+        padding: 14px;
+        transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.25s cubic-bezier(0.4, 0, 0.2, 1), max-width 0.25s cubic-bezier(0.4, 0, 0.2, 1), padding 0.25s ease, opacity 0.2s ease;
         overflow: hidden;
         flex-shrink: 0;
+        position: relative;
+        z-index: 2;
     }
     .chat-sidebar.collapsed {
         width: 0 !important;
         min-width: 0 !important;
-        padding-left: 0 !important;
-        padding-right: 0 !important;
+        max-width: 0 !important;
+        padding: 0 !important;
         border-right: none !important;
-        opacity: 0;
-        pointer-events: none;
+        opacity: 0 !important;
+        pointer-events: none !important;
     }
     .chat-main {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
+        flex: 1 1 0%;
+        min-width: 0;
+        height: 100%;
+        display: flex !important;
+        flex-direction: column !important;
         background: #f8fafc;
         overflow: hidden;
+        position: relative;
+        z-index: 1;
     }
     .chat-messages {
         flex: 1;
@@ -344,10 +358,10 @@
 
 @section('content')
 <div class="container-fluid px-2 px-md-4">
-    <div class="chat-container card border-0 shadow-sm rounded-4 overflow-hidden">
+    <div class="chat-container shadow-sm">
         
         <!-- Desktop Conversations Sidebar -->
-        <aside class="chat-sidebar p-3 d-none d-md-flex" id="chatSidebar" aria-label="Conversations Sidebar">
+        <aside class="chat-sidebar d-none d-md-flex" id="chatSidebar" aria-label="Conversations Sidebar">
             <!-- Sidebar Header & Toggle -->
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <div class="d-flex align-items-center gap-2">
@@ -499,58 +513,6 @@
                 @endif
             </div>
         </aside>
-
-        <!-- Offcanvas Sidebar for Mobile -->
-        <div class="offcanvas offcanvas-start" tabindex="-1" id="mobileSessionDrawer" aria-labelledby="mobileDrawerLabel">
-            <div class="offcanvas-header border-bottom">
-                <div class="d-flex align-items-center gap-2">
-                    <h5 class="offcanvas-title fw-bold mb-0" id="mobileDrawerLabel">
-                        <i class="bi bi-chat-square-text text-primary me-1"></i> Conversations
-                    </h5>
-                    <span class="badge bg-secondary-subtle text-secondary rounded-pill font-monospace" style="font-size: 0.72rem;">
-                        {{ $sessions->count() }}
-                    </span>
-                </div>
-                <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-            </div>
-            <div class="offcanvas-body d-flex flex-column p-3">
-                <form action="{{ route('chat.store') }}" method="POST" class="mb-2">
-                    @csrf
-                    <button type="submit" class="btn btn-primary w-100 rounded-pill py-2 shadow-sm d-flex align-items-center justify-content-center gap-2 fw-semibold">
-                        <i class="bi bi-plus-lg"></i> Start New Conversation
-                    </button>
-                </form>
-
-                <div class="mb-2">
-                    <div class="input-group input-group-sm">
-                        <span class="input-group-text bg-light border-end-0 text-muted ps-2 pe-1">
-                            <i class="bi bi-search"></i>
-                        </span>
-                        <input type="text" id="mobileConversationSearchInput" class="form-control form-control-sm bg-light border-start-0" placeholder="Filter conversations..." autocomplete="off">
-                    </div>
-                </div>
-
-                <div class="overflow-auto flex-grow-1" id="mobileSessionList">
-                    @foreach($sessions as $s)
-                        <div class="session-item {{ $s->is_pinned ? 'pinned' : '' }} {{ $activeSession && $activeSession->id === $s->id ? 'active' : '' }} mb-1 mobile-session-row" data-session-title="{{ strtolower($s->title) }}">
-                            <a href="{{ route('chat.show', $s) }}" class="text-truncate text-decoration-none flex-grow-1 text-reset">
-                                @if($s->is_pinned)
-                                    <i class="bi bi-pin-angle-fill text-primary me-1"></i>
-                                @else
-                                    <i class="bi bi-chat-left-text me-1 text-muted"></i>
-                                @endif
-                                <span>{{ $s->title }}</span>
-                            </a>
-                            <form action="{{ route('chat.destroy', $s) }}" method="POST" onsubmit="return confirm('Delete?');">
-                                @csrf
-                                @method('DELETE')
-                                <button type="submit" class="btn btn-link text-muted p-1"><i class="bi bi-trash"></i></button>
-                            </form>
-                        </div>
-                    @endforeach
-                </div>
-            </div>
-        </div>
 
         <!-- Chat Main Area -->
         <div class="chat-main">
@@ -712,6 +674,58 @@
                     </form>
                 </div>
             @endif
+        </div>
+    </div>
+
+    <!-- Offcanvas Sidebar for Mobile -->
+    <div class="offcanvas offcanvas-start" tabindex="-1" id="mobileSessionDrawer" aria-labelledby="mobileDrawerLabel">
+        <div class="offcanvas-header border-bottom">
+            <div class="d-flex align-items-center gap-2">
+                <h5 class="offcanvas-title fw-bold mb-0" id="mobileDrawerLabel">
+                    <i class="bi bi-chat-square-text text-primary me-1"></i> Conversations
+                </h5>
+                <span class="badge bg-secondary-subtle text-secondary rounded-pill font-monospace" style="font-size: 0.72rem;">
+                    {{ $sessions->count() }}
+                </span>
+            </div>
+            <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        </div>
+        <div class="offcanvas-body d-flex flex-column p-3">
+            <form action="{{ route('chat.store') }}" method="POST" class="mb-2">
+                @csrf
+                <button type="submit" class="btn btn-primary w-100 rounded-pill py-2 shadow-sm d-flex align-items-center justify-content-center gap-2 fw-semibold">
+                    <i class="bi bi-plus-lg"></i> Start New Conversation
+                </button>
+            </form>
+
+            <div class="mb-2">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-light border-end-0 text-muted ps-2 pe-1">
+                        <i class="bi bi-search"></i>
+                    </span>
+                    <input type="text" id="mobileConversationSearchInput" class="form-control form-control-sm bg-light border-start-0" placeholder="Filter conversations..." autocomplete="off">
+                </div>
+            </div>
+
+            <div class="overflow-auto flex-grow-1" id="mobileSessionList">
+                @foreach($sessions as $s)
+                    <div class="session-item {{ $s->is_pinned ? 'pinned' : '' }} {{ $activeSession && $activeSession->id === $s->id ? 'active' : '' }} mb-1 mobile-session-row" data-session-title="{{ strtolower($s->title) }}">
+                        <a href="{{ route('chat.show', $s) }}" class="text-truncate text-decoration-none flex-grow-1 text-reset">
+                            @if($s->is_pinned)
+                                <i class="bi bi-pin-angle-fill text-primary me-1"></i>
+                            @else
+                                <i class="bi bi-chat-left-text me-1 text-muted"></i>
+                            @endif
+                            <span>{{ $s->title }}</span>
+                        </a>
+                        <form action="{{ route('chat.destroy', $s) }}" method="POST" onsubmit="return confirm('Delete?');">
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit" class="btn btn-link text-muted p-1"><i class="bi bi-trash"></i></button>
+                        </form>
+                    </div>
+                @endforeach
+            </div>
         </div>
     </div>
 </div>
