@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\MasterPromptController;
 use App\Http\Controllers\Admin\McpServerController;
 use App\Http\Controllers\Admin\SkillController;
 use App\Http\Controllers\Admin\TokenMetricController;
+use App\Http\Controllers\Admin\UserChatController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\ChatController;
 use Illuminate\Support\Facades\Auth;
@@ -68,4 +69,10 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
     // Token Consumption Metrics
     Route::get('metrics', [TokenMetricController::class, 'index'])->name('metrics.index');
+
+    // Regular User Chat History & Conversation Audits (Admin Only)
+    Route::get('user-chats', [UserChatController::class, 'index'])->name('user-chats.index');
+    Route::get('user-chats/{session}', [UserChatController::class, 'show'])->name('user-chats.show');
+    Route::get('user-chats/{session}/export', [UserChatController::class, 'export'])->name('user-chats.export');
+    Route::delete('user-chats/{session}', [UserChatController::class, 'destroy'])->name('user-chats.destroy');
 });

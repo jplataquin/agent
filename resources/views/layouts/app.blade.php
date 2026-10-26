@@ -120,6 +120,7 @@
                                     <ul class="dropdown-menu shadow-sm border-0">
                                         <li><a class="dropdown-item" href="{{ route('admin.dashboard') }}"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a></li>
                                         <li><hr class="dropdown-divider"></li>
+                                        <li><a class="dropdown-item" href="{{ route('admin.user-chats.index') }}"><i class="bi bi-chat-square-text me-2"></i>User Chat Sessions</a></li>
                                         <li><a class="dropdown-item" href="{{ route('admin.users.index') }}"><i class="bi bi-people me-2"></i>Users</a></li>
                                         <li><a class="dropdown-item" href="{{ route('admin.skills.index') }}"><i class="bi bi-tools me-2"></i>AI Skills</a></li>
                                         <li><a class="dropdown-item" href="{{ route('admin.mcp-servers.index') }}"><i class="bi bi-hdd-network me-2"></i>HTTP MCP Servers</a></li>

@@ -36,6 +36,9 @@
                             </td>
                             <td class="text-muted small">{{ $user->created_at->format('M d, Y') }}</td>
                             <td class="text-end pe-3">
+                                <a href="{{ route('admin.user-chats.index', ['user_id' => $user->id]) }}" class="btn btn-sm btn-outline-info rounded-pill me-1" title="View Recorded Chat Sessions">
+                                    <i class="bi bi-chat-square-text"></i>
+                                </a>
                                 <a href="{{ route('admin.users.edit', $user) }}" class="btn btn-sm btn-outline-secondary rounded-pill me-1">
                                     <i class="bi bi-pencil"></i>
                                 </a>
