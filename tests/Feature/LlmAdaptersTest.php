@@ -290,4 +290,122 @@ class LlmAdaptersTest extends TestCase
             'is_default' => true,
         ]);
     }
+
+    public function test_gemini_adapter_formats_uppercase_schema_and_alternates_roles()
+    {
+        $provider = LlmProvider::create([
+            'name' => 'Test Gemini Tool Formatting',
+            'provider_type' => 'gemini',
+            'api_key' => 'live_gemini_key_123',
+            'model' => 'gemini-1.5-flash',
+            'temperature' => 0.7,
+            'is_default' => false,
+            'is_active' => true,
+        ]);
+
+        $recordedPayload = null;
+        Http::fake([
+            'https://generativelanguage.googleapis.com/*' => function ($request) use (&$recordedPayload) {
+                $recordedPayload = $request->data();
+
+                return Http::response([
+                    'candidates' => [
+                        [
+                            'content' => [
+                                'parts' => [
+                                    ['text' => 'Schema formatted successfully.'],
+                                ],
+                                'role' => 'model',
+                            ],
+                        ],
+                    ],
+                ], 200);
+            },
+        ]);
+
+        $adapter = app(GeminiAdapter::class);
+        $adapter->send(
+            $provider,
+            'System instructions',
+            [
+                ['role' => 'user', 'content' => 'First user question'],
+                ['role' => 'user', 'content' => 'Second immediate user follow-up'], // Consecutive user turns
+            ],
+            [
+                [
+                    'type' => 'function',
+                    'function' => [
+                        'name' => 'test_tool',
+                        'description' => 'Test tool desc',
+                        'parameters' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'query' => ['type' => 'string'],
+                            ],
+                            'required' => ['query'],
+                        ],
+                    ],
+                ],
+            ]
+        );
+
+        $this->assertNotNull($recordedPayload);
+        // Schema types must be uppercase for Gemini REST API
+        $toolDecl = $recordedPayload['tools'][0]['functionDeclarations'][0];
+        $this->assertEquals('OBJECT', $toolDecl['parameters']['type']);
+        $this->assertEquals('STRING', $toolDecl['parameters']['properties']->query['type']);
+
+        // Turns must be merged so roles alternate strictly
+        $this->assertCount(1, $recordedPayload['contents']);
+        $this->assertEquals('user', $recordedPayload['contents'][0]['role']);
+        $this->assertCount(2, $recordedPayload['contents'][0]['parts']);
+    }
+
+    public function test_ai_agent_service_emits_error_when_adapter_fails()
+    {
+        LlmProvider::query()->update(['is_default' => false]);
+        $failingProvider = LlmProvider::create([
+            'name' => 'Failing Gemini',
+            'provider_type' => 'gemini',
+            'api_key' => 'invalid_gemini_key',
+            'model' => 'gemini-1.5-flash',
+            'temperature' => 0.7,
+            'is_default' => true,
+            'is_active' => true,
+        ]);
+
+        Http::fake([
+            'https://generativelanguage.googleapis.com/*' => Http::response([
+                'error' => [
+                    'code' => 400,
+                    'message' => 'API key not valid. Please pass a valid API key.',
+                    'status' => 'INVALID_ARGUMENT',
+                ],
+            ], 400),
+        ]);
+
+        $user = User::where('role', User::ROLE_REGULAR)->first();
+        $session = ChatSession::create([
+            'user_id' => $user->id,
+            'title' => 'Test Error Output',
+        ]);
+
+        $emittedChunk = null;
+        $onChunk = function ($text) use (&$emittedChunk) {
+            $emittedChunk = $text;
+        };
+
+        $service = app(\App\Services\AiAgentService::class);
+        $result = $service->generateResponse($session, $onChunk);
+
+        $this->assertNotNull($emittedChunk);
+        $this->assertStringContainsString('API key not valid', $emittedChunk);
+        $this->assertStringContainsString('AI Provider Error', $result['content']);
+
+        // Assistant error message saved to database
+        $this->assertDatabaseHas('chat_messages', [
+            'chat_session_id' => $session->id,
+            'role' => 'assistant',
+        ]);
+    }
 }

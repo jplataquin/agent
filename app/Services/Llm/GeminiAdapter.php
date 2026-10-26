@@ -23,8 +23,8 @@ class GeminiAdapter implements LlmAdapterInterface
             );
         }
 
-        // Format contents for Gemini
-        $contents = [];
+        // Format raw contents for Gemini
+        $rawContents = [];
 
         foreach ($messages as $msg) {
             $role = $msg['role'];
@@ -34,13 +34,16 @@ class GeminiAdapter implements LlmAdapterInterface
             }
 
             if ($role === 'tool') {
-                $contents[] = [
-                    'role' => 'function',
+                $toolName = $msg['tool_name'] ?? $msg['tool_call_id'] ?? 'tool_result';
+                $rawContents[] = [
+                    'role' => 'user', // In Gemini REST API, functionResponse has role 'user'
                     'parts' => [
                         [
                             'functionResponse' => [
-                                'name' => $msg['tool_call_id'] ?? 'tool_result',
-                                'response' => ['result' => $msg['content'] ?? ''],
+                                'name' => $toolName,
+                                'response' => [
+                                    'content' => $msg['content'] ?? '',
+                                ],
                             ],
                         ],
                     ],
@@ -62,12 +65,12 @@ class GeminiAdapter implements LlmAdapterInterface
                         ];
                     }
                 }
-                $contents[] = [
+                $rawContents[] = [
                     'role' => 'model',
-                    'parts' => empty($parts) ? [['text' => 'Proceeding...']] : $parts,
+                    'parts' => empty($parts) ? [['text' => 'Proceeding with tool execution...']] : $parts,
                 ];
             } else {
-                $contents[] = [
+                $rawContents[] = [
                     'role' => 'user',
                     'parts' => [
                         ['text' => $msg['content'] ?? ''],
@@ -76,31 +79,76 @@ class GeminiAdapter implements LlmAdapterInterface
             }
         }
 
-        // Format MCP tools for Gemini functionDeclarations
+        // Normalize turn alternation: Gemini strictly requires user -> model -> user -> model
+        $normalizedContents = [];
+        foreach ($rawContents as $entry) {
+            // Remove empty text parts
+            $filteredParts = array_values(array_filter($entry['parts'], function ($part) {
+                if (isset($part['text']) && trim($part['text']) === '') {
+                    return false;
+                }
+
+                return true;
+            }));
+
+            if (empty($filteredParts)) {
+                continue;
+            }
+
+            $entry['parts'] = $filteredParts;
+
+            $lastIdx = count($normalizedContents) - 1;
+            if ($lastIdx >= 0 && $normalizedContents[$lastIdx]['role'] === $entry['role']) {
+                $normalizedContents[$lastIdx]['parts'] = array_merge(
+                    $normalizedContents[$lastIdx]['parts'],
+                    $entry['parts']
+                );
+            } else {
+                $normalizedContents[] = $entry;
+            }
+        }
+
+        // Gemini requires the initial turn to be 'user'
+        if (! empty($normalizedContents) && $normalizedContents[0]['role'] === 'model') {
+            array_unshift($normalizedContents, [
+                'role' => 'user',
+                'parts' => [['text' => 'Hello']],
+            ]);
+        }
+
+        if (empty($normalizedContents)) {
+            $normalizedContents[] = [
+                'role' => 'user',
+                'parts' => [['text' => 'Hello']],
+            ];
+        }
+
+        // Format MCP tools for Gemini functionDeclarations with uppercase Schema enum types
         $functionDeclarations = [];
         foreach ($mcpTools as $t) {
             $fn = $t['function'];
+            $params = $fn['parameters'] ?? ['type' => 'object', 'properties' => []];
             $functionDeclarations[] = [
                 'name' => $fn['name'],
                 'description' => $fn['description'] ?? 'MCP Tool',
-                'parameters' => (object) ($fn['parameters'] ?? [
-                    'type' => 'object',
-                    'properties' => (object) [],
-                ]),
+                'parameters' => $this->convertSchemaToGemini(is_array($params) ? $params : []),
             ];
         }
 
         $payload = [
-            'systemInstruction' => [
-                'parts' => [
-                    ['text' => $systemPrompt],
-                ],
-            ],
-            'contents' => $contents,
+            'contents' => $normalizedContents,
             'generationConfig' => [
                 'temperature' => (float) $provider->temperature,
             ],
         ];
+
+        if (! empty(trim($systemPrompt))) {
+            $payload['systemInstruction'] = [
+                'parts' => [
+                    ['text' => $systemPrompt],
+                ],
+            ];
+        }
 
         if ($provider->max_tokens) {
             $payload['generationConfig']['maxOutputTokens'] = (int) $provider->max_tokens;
@@ -113,9 +161,11 @@ class GeminiAdapter implements LlmAdapterInterface
         }
 
         $model = $provider->model ?: 'gemini-1.5-flash';
+        $model = preg_replace('/^models\//', '', $model);
         if (str_contains(strtolower($model), 'gpt-')) {
             $model = 'gemini-1.5-flash';
         }
+
         $baseUrl = rtrim($provider->base_url ?: 'https://generativelanguage.googleapis.com', '/');
         if (str_contains($baseUrl, 'api.openai.com')) {
             $baseUrl = 'https://generativelanguage.googleapis.com';
@@ -128,8 +178,13 @@ class GeminiAdapter implements LlmAdapterInterface
             ])->timeout(60)->post($endpoint, $payload);
 
             if (! $response->successful()) {
+                $errBody = $response->body();
+                $errJson = $response->json();
+                $errDetail = $errJson['error']['message'] ?? $errBody;
+                Log::error("Gemini API Error ({$response->status()}): {$errDetail}");
+
                 return new LlmResponse(
-                    errorMessage: "Gemini API Error ({$response->status()}): ".$response->body()
+                    errorMessage: "Gemini API Error ({$response->status()}): {$errDetail}"
                 );
             }
 
@@ -137,7 +192,12 @@ class GeminiAdapter implements LlmAdapterInterface
             $candidate = $data['candidates'][0] ?? null;
 
             if (! $candidate) {
-                return new LlmResponse(errorMessage: 'Empty response returned by Gemini API.');
+                $blockReason = $data['promptFeedback']['blockReason'] ?? null;
+                $msg = $blockReason
+                    ? "Gemini blocked the request due to content safety policy ({$blockReason})."
+                    : 'Gemini returned an empty response with no candidates.';
+
+                return new LlmResponse(errorMessage: $msg);
             }
 
             $parts = $candidate['content']['parts'] ?? [];
@@ -160,6 +220,13 @@ class GeminiAdapter implements LlmAdapterInterface
                 }
             }
 
+            if (empty($textContent) && empty($toolCalls)) {
+                $finishReason = $candidate['finishReason'] ?? 'STOP';
+                if ($finishReason !== 'STOP') {
+                    $textContent = "*(Gemini completed with status: {$finishReason})*";
+                }
+            }
+
             return new LlmResponse(
                 content: ! empty($textContent) ? $textContent : null,
                 toolCalls: $toolCalls,
@@ -169,7 +236,44 @@ class GeminiAdapter implements LlmAdapterInterface
         } catch (Exception $e) {
             Log::error('GeminiAdapter Exception: '.$e->getMessage());
 
-            return new LlmResponse(errorMessage: $e->getMessage());
+            return new LlmResponse(errorMessage: 'Connection to Gemini API failed: '.$e->getMessage());
         }
+    }
+
+    /**
+     * Convert OpenAPI/JSON Schema parameters to Google Gemini Schema format.
+     */
+    protected function convertSchemaToGemini(array $schema): array
+    {
+        $type = strtoupper((string) ($schema['type'] ?? 'OBJECT'));
+        $result = [
+            'type' => $type,
+        ];
+
+        if (! empty($schema['description'])) {
+            $result['description'] = (string) $schema['description'];
+        }
+
+        if ($type === 'OBJECT') {
+            $properties = [];
+            if (! empty($schema['properties']) && is_array($schema['properties'])) {
+                foreach ($schema['properties'] as $propName => $propDef) {
+                    if (is_array($propDef)) {
+                        $properties[$propName] = $this->convertSchemaToGemini($propDef);
+                    }
+                }
+            }
+            $result['properties'] = (object) $properties;
+
+            if (! empty($schema['required']) && is_array($schema['required'])) {
+                $result['required'] = array_values($schema['required']);
+            }
+        } elseif ($type === 'ARRAY') {
+            if (! empty($schema['items']) && is_array($schema['items'])) {
+                $result['items'] = $this->convertSchemaToGemini($schema['items']);
+            }
+        }
+
+        return $result;
     }
 }

@@ -109,9 +109,20 @@ class AiAgentService
                 $llmResponse = $adapter->send($provider, $systemPrompt, $messages, $rawTools);
 
                 if ($llmResponse->isError()) {
+                    $errText = "⚠️ **AI Provider Error:**\n\n{$llmResponse->errorMessage}";
+                    if ($onChunk) {
+                        $onChunk($errText);
+                    }
+
+                    ChatMessage::create([
+                        'chat_session_id' => $session->id,
+                        'role' => ChatMessage::ROLE_ASSISTANT,
+                        'content' => $errText,
+                    ]);
+
                     return [
                         'error' => $llmResponse->errorMessage,
-                        'content' => $llmResponse->errorMessage,
+                        'content' => $errText,
                     ];
                 }
 

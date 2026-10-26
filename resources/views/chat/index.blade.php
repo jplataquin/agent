@@ -963,6 +963,19 @@
                         sendBtn.disabled = false;
                         input.focus();
 
+                        if (!assistantBubble && payload.result) {
+                            const fallbackText = payload.result.content || payload.result.error || 'No response returned from model.';
+                            assistantRow = document.createElement('div');
+                            assistantRow.className = 'message-row assistant-row';
+                            assistantBubble = document.createElement('div');
+                            assistantBubble.className = 'message-bubble message-assistant markdown-body';
+                            assistantBubble.id = newMsgId;
+                            assistantBubble.setAttribute('data-raw-content', fallbackText);
+                            assistantRow.appendChild(assistantBubble);
+                            messagesContainer.insertBefore(assistantRow, typingIndicator);
+                            renderMarkdown(assistantBubble);
+                        }
+
                         // Append action buttons including Listen (TTS)
                         if (assistantRow && !assistantRow.querySelector('.message-actions')) {
                             const actions = document.createElement('div');
@@ -994,6 +1007,17 @@
                 input.disabled = false;
                 sendBtn.disabled = false;
                 input.focus();
+
+                if (!assistantBubble) {
+                    assistantRow = document.createElement('div');
+                    assistantRow.className = 'message-row assistant-row';
+                    assistantBubble = document.createElement('div');
+                    assistantBubble.className = 'message-bubble message-assistant text-danger';
+                    assistantBubble.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-1"></i> Communication error connecting to AI stream. Please check connection and try again.';
+                    assistantRow.appendChild(assistantBubble);
+                    messagesContainer.insertBefore(assistantRow, typingIndicator);
+                    scrollToBottom();
+                }
             };
         });
     });
