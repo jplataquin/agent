@@ -1,0 +1,36 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class LlmProvider extends Model
+{
+    use HasFactory;
+
+    protected $fillable = [
+        'name',
+        'provider_type',
+        'api_key',
+        'model',
+        'base_url',
+        'temperature',
+        'max_tokens',
+        'is_default',
+        'is_active',
+    ];
+
+    protected $casts = [
+        'temperature' => 'float',
+        'max_tokens' => 'integer',
+        'is_default' => 'boolean',
+        'is_active' => 'boolean',
+    ];
+
+    public static function getDefault(): ?self
+    {
+        return self::where('is_default', true)->where('is_active', true)->first()
+            ?? self::where('is_active', true)->first();
+    }
+}
