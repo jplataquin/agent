@@ -113,9 +113,12 @@
                             </li>
 
                             @if(Auth::user()->isAdmin())
-                                <li class="nav-item dropdown">
-                                    <a class="nav-link dropdown-toggle fw-semibold {{ request()->is('admin*') ? 'active text-primary' : '' }}" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <li class="nav-item dropdown d-flex align-items-center">
+                                    <a class="nav-link fw-semibold pe-1 {{ request()->is('admin*') ? 'active text-primary' : '' }}" href="{{ route('admin.dashboard') }}">
                                         <i class="bi bi-shield-lock me-1"></i> Admin Console
+                                    </a>
+                                    <a class="nav-link dropdown-toggle dropdown-toggle-split ps-1 text-muted" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="Admin Menu Options">
+                                        <span class="visually-hidden">Toggle Admin Console Menu</span>
                                     </a>
                                     <ul class="dropdown-menu shadow-sm border-0">
                                         <li><a class="dropdown-item" href="{{ route('admin.dashboard') }}"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a></li>
