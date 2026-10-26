@@ -52,6 +52,9 @@
                                 </span>
                             </td>
                             <td class="text-end pe-3">
+                                <a href="{{ route('admin.llm-providers.logs', $provider) }}" class="btn btn-sm btn-outline-dark rounded-pill me-1" title="View Diagnostic Logs">
+                                    <i class="bi bi-journal-code"></i> Logs
+                                </a>
                                 <form action="{{ route('admin.llm-providers.test', $provider) }}" method="POST" class="d-inline" title="Test Connection">
                                     @csrf
                                     <button type="submit" class="btn btn-sm btn-outline-info rounded-pill me-1">

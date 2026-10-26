@@ -2,6 +2,7 @@
 
 namespace App\Services\Llm;
 
+use App\Models\LlmLog;
 use App\Models\LlmProvider;
 use Exception;
 use Illuminate\Support\Facades\Http;
@@ -16,6 +17,20 @@ class OpenAiAdapter implements LlmAdapterInterface
             $lastUser = collect($messages)->where('role', 'user')->last();
             $reply = "Hello! I am your Company AI Agent. I received your request: '".($lastUser['content'] ?? '')."'. (Note: Active LLM provider is using a mock key. Update your API credentials in the Admin Console to connect to live OpenAI, Claude, or Gemini.)";
 
+            LlmLog::record(
+                provider: $provider,
+                endpoint: 'mock://local-openai-simulator',
+                httpMethod: 'MOCK',
+                requestPayload: ['messages' => $messages],
+                statusCode: 200,
+                responseBody: json_encode(['mock_reply' => $reply]),
+                latencyMs: 10,
+                isSuccess: true,
+                errorMessage: null,
+                promptTokens: 50,
+                completionTokens: 40
+            );
+
             return new LlmResponse(
                 content: $reply,
                 promptTokens: 50,
@@ -28,16 +43,15 @@ class OpenAiAdapter implements LlmAdapterInterface
         ];
 
         foreach ($messages as $msg) {
-            $entry = ['role' => $msg['role']];
+            $entry = [
+                'role' => $msg['role'],
+                'content' => $msg['content'] ?? '',
+            ];
             if ($msg['role'] === 'tool') {
-                $entry['content'] = $msg['content'] ?? '';
-                $entry['tool_call_id'] = $msg['tool_call_id'] ?? 'call_1';
-            } elseif ($msg['role'] === 'assistant') {
-                $entry['content'] = $msg['content'];
-                if (! empty($msg['tool_calls'])) {
-                    $entry['tool_calls'] = $msg['tool_calls'];
-                }
-            } else {
+                $entry['tool_call_id'] = $msg['tool_call_id'] ?? '';
+            }
+            if ($msg['role'] === 'assistant' && ! empty($msg['tool_calls'])) {
+                $entry['tool_calls'] = $msg['tool_calls'];
                 $entry['content'] = $msg['content'] ?? '';
             }
             $formattedMessages[] = $entry;
@@ -69,15 +83,37 @@ class OpenAiAdapter implements LlmAdapterInterface
         $baseUrl = rtrim($provider->base_url ?: 'https://api.openai.com/v1', '/');
         $endpoint = $baseUrl.'/chat/completions';
 
+        $startTime = microtime(true);
         try {
             $response = Http::withHeaders([
                 'Authorization' => 'Bearer '.$provider->api_key,
                 'Content-Type' => 'application/json',
             ])->timeout(60)->post($endpoint, $payload);
 
+            $latencyMs = (int) round((microtime(true) - $startTime) * 1000);
+            $statusCode = $response->status();
+            $rawBody = $response->body();
+
             if (! $response->successful()) {
+                $errBody = $response->body();
+                $errJson = $response->json();
+                $errDetail = $errJson['error']['message'] ?? $errBody;
+                Log::error("OpenAI API Error ({$statusCode}): {$errDetail}");
+
+                LlmLog::record(
+                    provider: $provider,
+                    endpoint: $endpoint,
+                    httpMethod: 'POST',
+                    requestPayload: $payload,
+                    statusCode: $statusCode,
+                    responseBody: $rawBody,
+                    latencyMs: $latencyMs,
+                    isSuccess: false,
+                    errorMessage: "OpenAI API Error ({$statusCode}): {$errDetail}",
+                );
+
                 return new LlmResponse(
-                    errorMessage: "OpenAI API Error ({$response->status()}): ".$response->body()
+                    errorMessage: "OpenAI API Error ({$statusCode}): {$errDetail}"
                 );
             }
 
@@ -85,6 +121,18 @@ class OpenAiAdapter implements LlmAdapterInterface
             $choice = $data['choices'][0] ?? null;
 
             if (! $choice) {
+                LlmLog::record(
+                    provider: $provider,
+                    endpoint: $endpoint,
+                    httpMethod: 'POST',
+                    requestPayload: $payload,
+                    statusCode: $statusCode,
+                    responseBody: $rawBody,
+                    latencyMs: $latencyMs,
+                    isSuccess: false,
+                    errorMessage: 'Empty response returned by OpenAI API.',
+                );
+
                 return new LlmResponse(errorMessage: 'Empty response returned by OpenAI API.');
             }
 
@@ -104,14 +152,44 @@ class OpenAiAdapter implements LlmAdapterInterface
                 }
             }
 
+            $promptTokens = (int) ($usage['prompt_tokens'] ?? 0);
+            $completionTokens = (int) ($usage['completion_tokens'] ?? 0);
+
+            LlmLog::record(
+                provider: $provider,
+                endpoint: $endpoint,
+                httpMethod: 'POST',
+                requestPayload: $payload,
+                statusCode: $statusCode,
+                responseBody: $rawBody,
+                latencyMs: $latencyMs,
+                isSuccess: true,
+                errorMessage: null,
+                promptTokens: $promptTokens,
+                completionTokens: $completionTokens,
+            );
+
             return new LlmResponse(
                 content: $message['content'] ?? null,
                 toolCalls: $toolCalls,
-                promptTokens: (int) ($usage['prompt_tokens'] ?? 0),
-                completionTokens: (int) ($usage['completion_tokens'] ?? 0)
+                promptTokens: $promptTokens,
+                completionTokens: $completionTokens
             );
         } catch (Exception $e) {
+            $latencyMs = (int) round((microtime(true) - $startTime) * 1000);
             Log::error('OpenAiAdapter Exception: '.$e->getMessage());
+
+            LlmLog::record(
+                provider: $provider,
+                endpoint: $endpoint,
+                httpMethod: 'POST',
+                requestPayload: $payload,
+                statusCode: 0,
+                responseBody: null,
+                latencyMs: $latencyMs,
+                isSuccess: false,
+                errorMessage: 'Connection failed: '.$e->getMessage(),
+            );
 
             return new LlmResponse(errorMessage: $e->getMessage());
         }

@@ -408,4 +408,77 @@ class LlmAdaptersTest extends TestCase
             'role' => 'assistant',
         ]);
     }
+
+    public function test_llm_log_records_request_with_masked_api_key()
+    {
+        $provider = LlmProvider::create([
+            'name' => 'Masking Test Provider',
+            'provider_type' => 'gemini',
+            'api_key' => 'AIzaSySecretApiKey123',
+            'model' => 'gemini-1.5-flash',
+            'temperature' => 0.7,
+            'is_default' => false,
+            'is_active' => true,
+        ]);
+
+        $log = \App\Models\LlmLog::record(
+            provider: $provider,
+            endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=AIzaSySecretApiKey123',
+            httpMethod: 'POST',
+            requestPayload: ['test' => 'data'],
+            statusCode: 200,
+            responseBody: '{"candidates": []}',
+            latencyMs: 120,
+            isSuccess: true,
+            errorMessage: null
+        );
+
+        $this->assertStringNotContainsString('AIzaSySecretApiKey123', $log->endpoint);
+        $this->assertStringContainsString('••••••••', $log->endpoint);
+        $this->assertEquals(200, $log->status_code);
+        $this->assertEquals(120, $log->latency_ms);
+    }
+
+    public function test_admin_can_view_llm_provider_diagnostic_logs()
+    {
+        $admin = User::where('role', User::ROLE_ADMIN)->first();
+        $provider = LlmProvider::first();
+
+        \App\Models\LlmLog::record(
+            provider: $provider,
+            endpoint: 'https://api.openai.com/v1/chat/completions',
+            httpMethod: 'POST',
+            requestPayload: ['messages' => []],
+            statusCode: 200,
+            responseBody: '{"choices": []}',
+            latencyMs: 95,
+            isSuccess: true
+        );
+
+        $response = $this->actingAs($admin)->get("/admin/llm-providers/{$provider->id}/logs");
+        $response->assertStatus(200);
+        $response->assertSee('Diagnostic Logs:');
+        $response->assertSee('95 ms');
+    }
+
+    public function test_admin_can_execute_live_test_prompt_and_clear_logs()
+    {
+        $admin = User::where('role', User::ROLE_ADMIN)->first();
+        $provider = LlmProvider::first();
+
+        // 1. Execute live diagnostic test prompt
+        $response = $this->actingAs($admin)->post("/admin/llm-providers/{$provider->id}/test-prompt", [
+            'prompt' => 'Diagnostic test message',
+        ]);
+        $response->assertSessionHas('success');
+
+        $this->assertDatabaseHas('llm_logs', [
+            'llm_provider_id' => $provider->id,
+        ]);
+
+        // 2. Clear logs
+        $deleteResponse = $this->actingAs($admin)->delete("/admin/llm-providers/{$provider->id}/logs");
+        $deleteResponse->assertSessionHas('success');
+        $this->assertEquals(0, $provider->logs()->count());
+    }
 }

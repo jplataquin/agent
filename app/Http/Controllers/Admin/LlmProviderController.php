@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\LlmLog;
 use App\Models\LlmProvider;
+use App\Services\Llm\LlmAdapterFactory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 
@@ -123,9 +125,23 @@ class LlmProviderController extends Controller
     public function testConnection(LlmProvider $llmProvider)
     {
         if (str_starts_with($llmProvider->api_key, 'sk-mock') || str_starts_with($llmProvider->api_key, 'mock-')) {
+            LlmLog::record(
+                provider: $llmProvider,
+                endpoint: 'mock://test-connection',
+                httpMethod: 'GET',
+                requestPayload: null,
+                statusCode: 200,
+                responseBody: '{"status": "simulated_ok"}',
+                latencyMs: 15,
+                isSuccess: true,
+                errorMessage: null,
+                action: 'connection_test'
+            );
+
             return back()->with('success', 'Mock provider connection simulated successfully.');
         }
 
+        $startTime = microtime(true);
         try {
             if ($llmProvider->provider_type === 'gemini') {
                 $baseUrl = rtrim($llmProvider->base_url ?: 'https://generativelanguage.googleapis.com', '/');
@@ -135,6 +151,20 @@ class LlmProviderController extends Controller
                 $endpoint = "{$baseUrl}/v1beta/models?key={$llmProvider->api_key}";
 
                 $response = Http::timeout(8)->get($endpoint);
+                $latencyMs = (int) round((microtime(true) - $startTime) * 1000);
+
+                LlmLog::record(
+                    provider: $llmProvider,
+                    endpoint: $endpoint,
+                    httpMethod: 'GET',
+                    requestPayload: null,
+                    statusCode: $response->status(),
+                    responseBody: $response->body(),
+                    latencyMs: $latencyMs,
+                    isSuccess: $response->successful(),
+                    errorMessage: $response->successful() ? null : $response->body(),
+                    action: 'connection_test'
+                );
 
                 if ($response->successful()) {
                     return back()->with('success', "Connection to Google Gemini ({$llmProvider->name}) successful! Models API responded 200 OK.");
@@ -157,6 +187,20 @@ class LlmProviderController extends Controller
                     'x-api-key' => $llmProvider->api_key,
                     'anthropic-version' => '2023-06-01',
                 ])->timeout(8)->get($endpoint);
+                $latencyMs = (int) round((microtime(true) - $startTime) * 1000);
+
+                LlmLog::record(
+                    provider: $llmProvider,
+                    endpoint: $endpoint,
+                    httpMethod: 'GET',
+                    requestPayload: null,
+                    statusCode: $response->status(),
+                    responseBody: $response->body(),
+                    latencyMs: $latencyMs,
+                    isSuccess: $response->successful(),
+                    errorMessage: $response->successful() ? null : $response->body(),
+                    action: 'connection_test'
+                );
 
                 if ($response->successful()) {
                     return back()->with('success', "Connection to Anthropic Claude ({$llmProvider->name}) successful!");
@@ -175,6 +219,20 @@ class LlmProviderController extends Controller
             $response = Http::withHeaders([
                 'Authorization' => 'Bearer '.$llmProvider->api_key,
             ])->timeout(8)->get($endpoint);
+            $latencyMs = (int) round((microtime(true) - $startTime) * 1000);
+
+            LlmLog::record(
+                provider: $llmProvider,
+                endpoint: $endpoint,
+                httpMethod: 'GET',
+                requestPayload: null,
+                statusCode: $response->status(),
+                responseBody: $response->body(),
+                latencyMs: $latencyMs,
+                isSuccess: $response->successful(),
+                errorMessage: $response->successful() ? null : $response->body(),
+                action: 'connection_test'
+            );
 
             if ($response->successful()) {
                 return back()->with('success', "Connection to {$llmProvider->name} successful!");
@@ -185,8 +243,59 @@ class LlmProviderController extends Controller
 
             return back()->with('error', "API returned status {$response->status()}: {$errorMsg}");
         } catch (\Exception $e) {
+            $latencyMs = (int) round((microtime(true) - $startTime) * 1000);
+            LlmLog::record(
+                provider: $llmProvider,
+                endpoint: $llmProvider->base_url ?: 'https://api.openai.com/v1',
+                httpMethod: 'GET',
+                requestPayload: null,
+                statusCode: 0,
+                responseBody: null,
+                latencyMs: $latencyMs,
+                isSuccess: false,
+                errorMessage: $e->getMessage(),
+                action: 'connection_test'
+            );
+
             return back()->with('error', 'Connection failed: '.$e->getMessage());
         }
+    }
+
+    public function logs(LlmProvider $llmProvider)
+    {
+        $logs = $llmProvider->logs()->paginate(30);
+
+        return view('admin.llm_providers.logs', compact('llmProvider', 'logs'));
+    }
+
+    public function clearLogs(LlmProvider $llmProvider)
+    {
+        $llmProvider->logs()->delete();
+
+        return back()->with('success', "Diagnostic logs for '{$llmProvider->name}' have been cleared.");
+    }
+
+    public function testPrompt(Request $request, LlmProvider $llmProvider, LlmAdapterFactory $adapterFactory)
+    {
+        $request->validate([
+            'prompt' => 'required|string|max:1000',
+        ]);
+
+        $prompt = $request->input('prompt');
+        $adapter = $adapterFactory->make($llmProvider);
+
+        $response = $adapter->send(
+            $llmProvider,
+            'You are a helpful AI diagnostic assistant. Reply concisely.',
+            [['role' => 'user', 'content' => $prompt]],
+            []
+        );
+
+        if ($response->isError()) {
+            return back()->with('error', "Live diagnostic test failed: {$response->errorMessage}");
+        }
+
+        return back()->with('success', "Live diagnostic response: \"{$response->content}\" (Tokens: {$response->promptTokens} prompt / {$response->completionTokens} completion)");
     }
 
     public function destroy(LlmProvider $llmProvider)

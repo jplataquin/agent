@@ -66,6 +66,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::resource('llm-providers', LlmProviderController::class);
     Route::post('llm-providers/{llm_provider}/set-default', [LlmProviderController::class, 'setDefault'])->name('llm-providers.set-default');
     Route::post('llm-providers/{llm_provider}/test', [LlmProviderController::class, 'testConnection'])->name('llm-providers.test');
+    Route::get('llm-providers/{llm_provider}/logs', [LlmProviderController::class, 'logs'])->name('llm-providers.logs');
+    Route::delete('llm-providers/{llm_provider}/logs', [LlmProviderController::class, 'clearLogs'])->name('llm-providers.logs.clear');
+    Route::post('llm-providers/{llm_provider}/test-prompt', [LlmProviderController::class, 'testPrompt'])->name('llm-providers.test-prompt');
 
     // Token Consumption Metrics
     Route::get('metrics', [TokenMetricController::class, 'index'])->name('metrics.index');

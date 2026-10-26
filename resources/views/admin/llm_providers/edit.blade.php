@@ -7,7 +7,12 @@
             <h4 class="fw-bold mb-0">Edit LLM Provider: {{ $provider->name }}</h4>
             <p class="text-muted small mb-0">Update credentials and settings for this model provider.</p>
         </div>
-        <a href="{{ route('admin.llm-providers.index') }}" class="btn btn-outline-secondary btn-sm rounded-pill">Back</a>
+        <div class="d-flex gap-2">
+            <a href="{{ route('admin.llm-providers.logs', $provider) }}" class="btn btn-outline-dark btn-sm rounded-pill">
+                <i class="bi bi-journal-code me-1"></i> Diagnostic Logs
+            </a>
+            <a href="{{ route('admin.llm-providers.index') }}" class="btn btn-outline-secondary btn-sm rounded-pill">Back</a>
+        </div>
     </div>
 
     <div class="card border-0 shadow-sm rounded-3">

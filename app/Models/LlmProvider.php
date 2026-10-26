@@ -33,4 +33,9 @@ class LlmProvider extends Model
         return self::where('is_default', true)->where('is_active', true)->first()
             ?? self::where('is_active', true)->first();
     }
+
+    public function logs()
+    {
+        return $this->hasMany(LlmLog::class, 'llm_provider_id')->orderByDesc('created_at');
+    }
 }

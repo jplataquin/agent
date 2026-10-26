@@ -2,6 +2,7 @@
 
 namespace App\Services\Llm;
 
+use App\Models\LlmLog;
 use App\Models\LlmProvider;
 use Exception;
 use Illuminate\Support\Facades\Http;
@@ -172,19 +173,36 @@ class GeminiAdapter implements LlmAdapterInterface
         }
         $endpoint = "{$baseUrl}/v1beta/models/{$model}:generateContent?key={$provider->api_key}";
 
+        $startTime = microtime(true);
         try {
             $response = Http::withHeaders([
                 'Content-Type' => 'application/json',
             ])->timeout(60)->post($endpoint, $payload);
 
+            $latencyMs = (int) round((microtime(true) - $startTime) * 1000);
+            $statusCode = $response->status();
+            $rawBody = $response->body();
+
             if (! $response->successful()) {
                 $errBody = $response->body();
                 $errJson = $response->json();
                 $errDetail = $errJson['error']['message'] ?? $errBody;
-                Log::error("Gemini API Error ({$response->status()}): {$errDetail}");
+                Log::error("Gemini API Error ({$statusCode}): {$errDetail}");
+
+                LlmLog::record(
+                    provider: $provider,
+                    endpoint: $endpoint,
+                    httpMethod: 'POST',
+                    requestPayload: $payload,
+                    statusCode: $statusCode,
+                    responseBody: $rawBody,
+                    latencyMs: $latencyMs,
+                    isSuccess: false,
+                    errorMessage: "Gemini API Error ({$statusCode}): {$errDetail}",
+                );
 
                 return new LlmResponse(
-                    errorMessage: "Gemini API Error ({$response->status()}): {$errDetail}"
+                    errorMessage: "Gemini API Error ({$statusCode}): {$errDetail}"
                 );
             }
 
@@ -196,6 +214,18 @@ class GeminiAdapter implements LlmAdapterInterface
                 $msg = $blockReason
                     ? "Gemini blocked the request due to content safety policy ({$blockReason})."
                     : 'Gemini returned an empty response with no candidates.';
+
+                LlmLog::record(
+                    provider: $provider,
+                    endpoint: $endpoint,
+                    httpMethod: 'POST',
+                    requestPayload: $payload,
+                    statusCode: $statusCode,
+                    responseBody: $rawBody,
+                    latencyMs: $latencyMs,
+                    isSuccess: false,
+                    errorMessage: $msg,
+                );
 
                 return new LlmResponse(errorMessage: $msg);
             }
@@ -227,14 +257,44 @@ class GeminiAdapter implements LlmAdapterInterface
                 }
             }
 
+            $promptTokens = (int) ($usage['promptTokenCount'] ?? 0);
+            $completionTokens = (int) ($usage['candidatesTokenCount'] ?? 0);
+
+            LlmLog::record(
+                provider: $provider,
+                endpoint: $endpoint,
+                httpMethod: 'POST',
+                requestPayload: $payload,
+                statusCode: $statusCode,
+                responseBody: $rawBody,
+                latencyMs: $latencyMs,
+                isSuccess: true,
+                errorMessage: null,
+                promptTokens: $promptTokens,
+                completionTokens: $completionTokens,
+            );
+
             return new LlmResponse(
                 content: ! empty($textContent) ? $textContent : null,
                 toolCalls: $toolCalls,
-                promptTokens: (int) ($usage['promptTokenCount'] ?? 0),
-                completionTokens: (int) ($usage['candidatesTokenCount'] ?? 0)
+                promptTokens: $promptTokens,
+                completionTokens: $completionTokens
             );
         } catch (Exception $e) {
+            $latencyMs = (int) round((microtime(true) - $startTime) * 1000);
             Log::error('GeminiAdapter Exception: '.$e->getMessage());
+
+            LlmLog::record(
+                provider: $provider,
+                endpoint: $endpoint,
+                httpMethod: 'POST',
+                requestPayload: $payload,
+                statusCode: 0,
+                responseBody: null,
+                latencyMs: $latencyMs,
+                isSuccess: false,
+                errorMessage: 'Connection to Gemini API failed: '.$e->getMessage(),
+            );
 
             return new LlmResponse(errorMessage: 'Connection to Gemini API failed: '.$e->getMessage());
         }
