@@ -32,6 +32,7 @@ class McpServerController extends Controller
             'endpoint_url' => 'required|url|max:255',
             'auth_type' => 'required|in:none,bearer,custom_header',
             'auth_token' => 'nullable|string',
+            'custom_header_name' => 'nullable|string|max:255',
             'description' => 'nullable|string',
             'is_active' => 'sometimes|boolean',
         ]);
@@ -40,10 +41,16 @@ class McpServerController extends Controller
 
         $server = McpServer::create($validated);
 
-        // Auto sync tools if available
-        $this->mcpService->syncTools($server);
+        // Auto sync tools upon registration
+        $result = $this->mcpService->syncTools($server);
 
-        return redirect()->route('admin.mcp-servers.index')->with('success', 'MCP Server registered.');
+        if ($result['success']) {
+            return redirect()->route('admin.mcp-servers.index')
+                ->with('success', "MCP Server '{$server->name}' registered. Discovered {$result['count']} tools.");
+        }
+
+        return redirect()->route('admin.mcp-servers.index')
+            ->with('error', "MCP Server '{$server->name}' registered, but could not discover tools: {$result['error']}");
     }
 
     public function edit(McpServer $mcpServer)
@@ -58,6 +65,7 @@ class McpServerController extends Controller
             'endpoint_url' => 'required|url|max:255',
             'auth_type' => 'required|in:none,bearer,custom_header',
             'auth_token' => 'nullable|string',
+            'custom_header_name' => 'nullable|string|max:255',
             'description' => 'nullable|string',
             'is_active' => 'sometimes|boolean',
         ]);
@@ -66,12 +74,34 @@ class McpServerController extends Controller
 
         $mcpServer->update($validated);
 
-        return redirect()->route('admin.mcp-servers.index')->with('success', 'MCP Server updated.');
+        // Re-sync tools on update
+        $result = $this->mcpService->syncTools($mcpServer);
+
+        if ($result['success']) {
+            return redirect()->route('admin.mcp-servers.index')
+                ->with('success', "MCP Server '{$mcpServer->name}' updated and synced {$result['count']} tools.");
+        }
+
+        return redirect()->route('admin.mcp-servers.index')
+            ->with('error', "MCP Server '{$mcpServer->name}' updated, but sync failed: {$result['error']}");
     }
 
-    public function sync(McpServer $mcpServer)
+    public function sync(Request $request, McpServer $mcpServer)
     {
         $result = $this->mcpService->syncTools($mcpServer);
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => $result['success'],
+                'count' => $result['count'] ?? 0,
+                'tools' => $result['tools'] ?? [],
+                'error' => $result['error'] ?? null,
+                'message' => $result['success']
+                    ? "Discovered {$result['count']} tools from {$mcpServer->name}."
+                    : "Failed to sync: {$result['error']}",
+                'last_sync_at' => $mcpServer->last_sync_at ? $mcpServer->last_sync_at->diffForHumans() : 'Just now',
+            ]);
+        }
 
         if ($result['success']) {
             return back()->with('success', "Discovered {$result['count']} tools from {$mcpServer->name}.");

@@ -82,4 +82,41 @@ class ChatTest extends TestCase
         $deleteResponse = $this->actingAs($userB)->delete("/chat/{$sessionA->id}");
         $deleteResponse->assertStatus(403);
     }
+
+    public function test_chat_view_has_unified_sidebar_toggle_and_no_dedicated_close_buttons()
+    {
+        $user = User::where('role', User::ROLE_REGULAR)->first();
+
+        $response = $this->actingAs($user)->get('/chat');
+        $response->assertStatus(200);
+
+        // Unified toggle button and icon exist
+        $response->assertSee('id="toggleSidebarBtn"', false);
+        $response->assertSee('id="toggleSidebarIcon"', false);
+        $response->assertSee('id="chatSidebarBackdrop"', false);
+
+        // Dedicated close buttons and redundant offcanvas drawer are removed
+        $response->assertDontSee('id="collapseSidebarBtn"', false);
+        $response->assertDontSee('id="mobileSessionDrawer"', false);
+    }
+
+    public function test_chat_view_places_mic_button_before_submit_button()
+    {
+        $user = User::where('role', User::ROLE_REGULAR)->first();
+        $session = ChatSession::create([
+            'user_id' => $user->id,
+            'title' => 'Test Session',
+        ]);
+
+        $response = $this->actingAs($user)->get("/chat/{$session->id}");
+        $response->assertStatus(200);
+
+        $html = $response->getContent();
+        $micPos = strpos($html, 'id="micBtn"');
+        $sendPos = strpos($html, 'id="sendBtn"');
+
+        $this->assertNotFalse($micPos);
+        $this->assertNotFalse($sendPos);
+        $this->assertLessThan($sendPos, $micPos, 'Mic button must appear before send button.');
+    }
 }

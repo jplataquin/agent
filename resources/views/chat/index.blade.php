@@ -7,11 +7,26 @@
         height: calc(100vh - 120px);
         min-height: 540px;
         display: flex !important;
-        flex-direction: row !important;
+        flex-direction: column !important;
         position: relative;
         background: #ffffff;
         border-radius: 16px;
         border: 1px solid #e2e8f0;
+        overflow: hidden;
+    }
+    .chat-header {
+        background: #ffffff;
+        border-bottom: 1px solid #e2e8f0;
+        position: relative;
+        z-index: 10;
+        flex-shrink: 0;
+    }
+    .chat-body {
+        flex: 1 1 0%;
+        min-height: 0;
+        display: flex !important;
+        flex-direction: row !important;
+        position: relative;
         overflow: hidden;
     }
     .chat-sidebar {
@@ -288,18 +303,20 @@
     }
 
     /* Dark Mode Theme Adjustments */
+    [data-bs-theme="dark"] .chat-header {
+        background: #1e293b;
+        border-color: #334155;
+    }
     [data-bs-theme="dark"] .chat-sidebar {
         background: #1e293b;
         border-color: #334155;
     }
-    [data-bs-theme="dark"] #conversationSearchInput,
-    [data-bs-theme="dark"] #mobileConversationSearchInput {
+    [data-bs-theme="dark"] #conversationSearchInput {
         background-color: #0f172a !important;
         border-color: #334155 !important;
         color: #f1f5f9;
     }
-    [data-bs-theme="dark"] .chat-sidebar .input-group-text,
-    [data-bs-theme="dark"] .offcanvas .input-group-text {
+    [data-bs-theme="dark"] .chat-sidebar .input-group-text {
         background-color: #0f172a !important;
         border-color: #334155 !important;
         color: #94a3b8;
@@ -342,15 +359,63 @@
         color: #e2e8f0;
     }
 
-    @media (max-width: 768px) {
-        .chat-sidebar {
-            display: none;
-        }
+    @media (max-width: 767.98px) {
         .chat-container {
             height: calc(100vh - 80px);
         }
+        .chat-sidebar {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            width: 285px;
+            max-width: 85%;
+            z-index: 1040;
+            box-shadow: 4px 0 24px rgba(0, 0, 0, 0.18);
+            transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
+            transform: translateX(-100%);
+            opacity: 0;
+            pointer-events: none;
+            border-right: 1px solid #e2e8f0;
+        }
+        .chat-sidebar.mobile-open {
+            transform: translateX(0) !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
+        }
+        .chat-sidebar.collapsed {
+            transform: translateX(-100%) !important;
+            width: 285px !important;
+            min-width: 285px !important;
+            max-width: 85% !important;
+            padding: 14px !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+            border-right: 1px solid #e2e8f0 !important;
+        }
+        .chat-sidebar-backdrop {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(15, 23, 42, 0.45);
+            z-index: 1030;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease;
+        }
+        .chat-sidebar-backdrop.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
         .message-bubble {
             max-width: 92%;
+        }
+    }
+    @media (min-width: 768px) {
+        .chat-sidebar-backdrop {
+            display: none !important;
         }
     }
 </style>
@@ -360,22 +425,76 @@
 <div class="container-fluid px-2 px-md-4">
     <div class="chat-container shadow-sm">
         
-        <!-- Desktop Conversations Sidebar -->
-        <aside class="chat-sidebar d-none d-md-flex" id="chatSidebar" aria-label="Conversations Sidebar">
-            <!-- Sidebar Header & Toggle -->
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <div class="d-flex align-items-center gap-2">
-                    <span class="fw-bold small text-secondary text-uppercase tracking-wider">
-                        <i class="bi bi-chat-square-text me-1 text-primary"></i> Conversations
-                    </span>
-                    <span class="badge bg-secondary-subtle text-secondary rounded-pill font-monospace" style="font-size: 0.72rem;">
-                        {{ $sessions->count() }}
-                    </span>
-                </div>
-                <button type="button" class="btn btn-sm btn-outline-secondary border-0 p-1 rounded-circle" id="collapseSidebarBtn" title="Collapse sidebar">
-                    <i class="bi bi-chevron-bar-left fs-6"></i>
+        <!-- Chat Top Header Bar -->
+        <div class="chat-header d-flex align-items-center justify-content-between p-2 p-md-3">
+            <div class="d-flex align-items-center gap-2">
+                <!-- Single Unified Sidebar Toggle Button -->
+                <button class="btn btn-outline-secondary btn-sm rounded-pill d-inline-flex align-items-center gap-1" id="toggleSidebarBtn" type="button" title="Toggle Conversations Sidebar" aria-label="Toggle Conversations Sidebar">
+                    <i class="bi bi-layout-sidebar-inset" id="toggleSidebarIcon"></i>
+                    <span class="small d-none d-lg-inline" id="toggleSidebarText">Sidebar</span>
                 </button>
+
+                <div>
+                    <div class="d-flex align-items-center gap-2">
+                        <h6 class="fw-bold mb-0 text-truncate" style="max-width: 280px;" id="activeHeaderTitle">
+                            {{ $activeSession ? $activeSession->title : 'Company AI Agent' }}
+                        </h6>
+                        @if(isset($activeProvider) && $activeProvider)
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle font-monospace" style="font-size: 0.72rem;" title="Active Provider: {{ $activeProvider->name }}">
+                                <i class="bi bi-cpu me-1"></i> {{ $activeProvider->name }} ({{ $activeProvider->model }})
+                            </span>
+                        @else
+                            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle" style="font-size: 0.72rem;">
+                                <i class="bi bi-exclamation-triangle me-1"></i> No Active LLM
+                            </span>
+                        @endif
+                    </div>
+                    @php
+                        $activeMcpToolsCount = count(app(\App\Services\McpService::class)->getAllActiveTools());
+                    @endphp
+                    <small class="text-muted d-block" style="font-size: 0.75rem;">
+                        @if($activeMcpToolsCount > 0)
+                            <i class="bi bi-shield-check text-success me-1"></i> {{ $activeMcpToolsCount }} {{ Str::plural('MCP Tool', $activeMcpToolsCount) }} &amp; Voice Connected
+                        @else
+                            <i class="bi bi-shield-exclamation text-warning me-1"></i> 0 MCP Tools Active (Voice Ready)
+                        @endif
+                    </small>
+                </div>
             </div>
+
+            <div class="d-flex align-items-center gap-2">
+                @if(Auth::user()->isAdmin())
+                    <a href="{{ route('admin.llm-providers.index') }}" class="btn btn-outline-secondary btn-sm rounded-pill d-none d-sm-inline-flex align-items-center gap-1" title="Manage Providers & Logs">
+                        <i class="bi bi-gear"></i> <span class="small">Providers</span>
+                    </a>
+                @endif
+                <form action="{{ route('chat.store') }}" method="POST" class="d-md-none">
+                    @csrf
+                    <button type="submit" class="btn btn-sm btn-primary rounded-pill px-2" title="New Conversation">
+                        <i class="bi bi-plus-lg"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Chat Body (Sidebar + Messages) -->
+        <div class="chat-body">
+            <!-- Sidebar Backdrop for Mobile overlay -->
+            <div class="chat-sidebar-backdrop" id="chatSidebarBackdrop"></div>
+
+            <!-- Unified Conversations Sidebar -->
+            <aside class="chat-sidebar" id="chatSidebar" aria-label="Conversations Sidebar">
+                <!-- Sidebar Header (Dedicated close button removed) -->
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="fw-bold small text-secondary text-uppercase tracking-wider">
+                            <i class="bi bi-chat-square-text me-1 text-primary"></i> Conversations
+                        </span>
+                        <span class="badge bg-secondary-subtle text-secondary rounded-pill font-monospace" style="font-size: 0.72rem;">
+                            {{ $sessions->count() }}
+                        </span>
+                    </div>
+                </div>
 
             <!-- New Chat Action -->
             <form action="{{ route('chat.store') }}" method="POST" class="mb-2">
@@ -516,55 +635,6 @@
 
         <!-- Chat Main Area -->
         <div class="chat-main">
-            <!-- Header bar -->
-            <div class="d-flex align-items-center justify-content-between p-2 p-md-3 bg-white border-bottom">
-                <div class="d-flex align-items-center gap-2">
-                    <!-- Mobile sidebar drawer toggle -->
-                    <button class="btn btn-outline-secondary btn-sm d-md-none rounded-circle" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileSessionDrawer" title="Open Conversations">
-                        <i class="bi bi-layout-sidebar fs-5"></i>
-                    </button>
-                    <!-- Desktop sidebar collapse toggle -->
-                    <button class="btn btn-outline-secondary btn-sm rounded-pill d-none d-md-inline-flex align-items-center gap-1" id="toggleSidebarBtn" title="Toggle Conversations Sidebar">
-                        <i class="bi bi-layout-sidebar-inset"></i>
-                        <span class="small d-none d-lg-inline">Sidebar</span>
-                    </button>
-
-                    <div>
-                        <div class="d-flex align-items-center gap-2">
-                            <h6 class="fw-bold mb-0 text-truncate" style="max-width: 280px;" id="activeHeaderTitle">
-                                {{ $activeSession ? $activeSession->title : 'Company AI Agent' }}
-                            </h6>
-                            @if(isset($activeProvider) && $activeProvider)
-                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle font-monospace" style="font-size: 0.72rem;" title="Active Provider: {{ $activeProvider->name }}">
-                                    <i class="bi bi-cpu me-1"></i> {{ $activeProvider->name }} ({{ $activeProvider->model }})
-                                </span>
-                            @else
-                                <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle" style="font-size: 0.72rem;">
-                                    <i class="bi bi-exclamation-triangle me-1"></i> No Active LLM
-                                </span>
-                            @endif
-                        </div>
-                        <small class="text-muted d-block" style="font-size: 0.75rem;">
-                            <i class="bi bi-shield-check text-success me-1"></i> MCP Tools &amp; Voice Connected
-                        </small>
-                    </div>
-                </div>
-
-                <div class="d-flex align-items-center gap-2">
-                    @if(Auth::user()->isAdmin())
-                        <a href="{{ route('admin.llm-providers.index') }}" class="btn btn-outline-secondary btn-sm rounded-pill d-none d-sm-inline-flex align-items-center gap-1" title="Manage Providers & Logs">
-                            <i class="bi bi-gear"></i> <span class="small">Providers</span>
-                        </a>
-                    @endif
-                    <form action="{{ route('chat.store') }}" method="POST" class="d-md-none">
-                        @csrf
-                        <button type="submit" class="btn btn-sm btn-primary rounded-pill px-2">
-                            <i class="bi bi-plus-lg"></i>
-                        </button>
-                    </form>
-                </div>
-            </div>
-
             <!-- Messages List -->
             <div class="chat-messages" id="chatMessages">
                 @if(! $activeSession)
@@ -653,85 +723,165 @@
                 <div class="chat-input-area">
                     <form id="chatForm" class="d-flex gap-2 align-items-end">
                         @csrf
-                        
-                        <!-- Speech-to-Text Microphone Button -->
-                        <button type="button" id="micBtn" class="btn btn-outline-secondary rounded-circle d-flex align-items-center justify-content-center shadow-sm" style="width: 44px; height: 44px; flex-shrink: 0;" title="Click to speak (Speech to Text)">
-                            <i class="bi bi-mic-fill fs-5" id="micIcon"></i>
-                        </button>
 
                         <textarea 
                             id="messageInput" 
                             name="message" 
                             rows="1" 
-                            class="form-control rounded-4 shadow-none" 
+                            class="form-control rounded-4 shadow-none flex-grow-1" 
                             placeholder="Ask a question or speak into microphone..." 
                             required 
                             style="resize: none;"></textarea>
 
-                        <button type="submit" id="sendBtn" class="btn btn-primary rounded-circle d-flex align-items-center justify-content-center shadow-sm" style="width: 44px; height: 44px; flex-shrink: 0;" title="Send message">
-                            <i class="bi bi-arrow-up-circle-fill fs-5"></i>
-                        </button>
+                        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                            <!-- Speech-to-Text Microphone Button -->
+                            <button type="button" id="micBtn" class="btn btn-outline-secondary rounded-circle d-flex align-items-center justify-content-center shadow-sm" style="width: 44px; height: 44px; flex-shrink: 0;" title="Click to speak (Speech to Text)">
+                                <i class="bi bi-mic-fill fs-5" id="micIcon"></i>
+                            </button>
+
+                            <!-- Submit Button -->
+                            <button type="submit" id="sendBtn" class="btn btn-primary rounded-circle d-flex align-items-center justify-content-center shadow-sm" style="width: 44px; height: 44px; flex-shrink: 0;" title="Send message">
+                                <i class="bi bi-arrow-up-circle-fill fs-5"></i>
+                            </button>
+                        </div>
                     </form>
                 </div>
             @endif
-        </div>
-    </div>
-
-    <!-- Offcanvas Sidebar for Mobile -->
-    <div class="offcanvas offcanvas-start" tabindex="-1" id="mobileSessionDrawer" aria-labelledby="mobileDrawerLabel">
-        <div class="offcanvas-header border-bottom">
-            <div class="d-flex align-items-center gap-2">
-                <h5 class="offcanvas-title fw-bold mb-0" id="mobileDrawerLabel">
-                    <i class="bi bi-chat-square-text text-primary me-1"></i> Conversations
-                </h5>
-                <span class="badge bg-secondary-subtle text-secondary rounded-pill font-monospace" style="font-size: 0.72rem;">
-                    {{ $sessions->count() }}
-                </span>
-            </div>
-            <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-        </div>
-        <div class="offcanvas-body d-flex flex-column p-3">
-            <form action="{{ route('chat.store') }}" method="POST" class="mb-2">
-                @csrf
-                <button type="submit" class="btn btn-primary w-100 rounded-pill py-2 shadow-sm d-flex align-items-center justify-content-center gap-2 fw-semibold">
-                    <i class="bi bi-plus-lg"></i> Start New Conversation
-                </button>
-            </form>
-
-            <div class="mb-2">
-                <div class="input-group input-group-sm">
-                    <span class="input-group-text bg-light border-end-0 text-muted ps-2 pe-1">
-                        <i class="bi bi-search"></i>
-                    </span>
-                    <input type="text" id="mobileConversationSearchInput" class="form-control form-control-sm bg-light border-start-0" placeholder="Filter conversations..." autocomplete="off">
-                </div>
-            </div>
-
-            <div class="overflow-auto flex-grow-1" id="mobileSessionList">
-                @foreach($sessions as $s)
-                    <div class="session-item {{ $s->is_pinned ? 'pinned' : '' }} {{ $activeSession && $activeSession->id === $s->id ? 'active' : '' }} mb-1 mobile-session-row" data-session-title="{{ strtolower($s->title) }}">
-                        <a href="{{ route('chat.show', $s) }}" class="text-truncate text-decoration-none flex-grow-1 text-reset">
-                            @if($s->is_pinned)
-                                <i class="bi bi-pin-angle-fill text-primary me-1"></i>
-                            @else
-                                <i class="bi bi-chat-left-text me-1 text-muted"></i>
-                            @endif
-                            <span>{{ $s->title }}</span>
-                        </a>
-                        <form action="{{ route('chat.destroy', $s) }}" method="POST" onsubmit="return confirm('Delete?');">
-                            @csrf
-                            @method('DELETE')
-                            <button type="submit" class="btn btn-link text-muted p-1"><i class="bi bi-trash"></i></button>
-                        </form>
-                    </div>
-                @endforeach
-            </div>
         </div>
     </div>
 </div>
 @endsection
 
 @push('scripts')
+<script>
+    // Unified Sidebar Toggle & Filtering (Works on Mobile and Desktop)
+    (function() {
+        const chatSidebar = document.getElementById('chatSidebar');
+        const chatSidebarBackdrop = document.getElementById('chatSidebarBackdrop');
+        const toggleSidebarBtn = document.getElementById('toggleSidebarBtn');
+        const toggleSidebarIcon = document.getElementById('toggleSidebarIcon');
+        const toggleSidebarText = document.getElementById('toggleSidebarText');
+        const searchInput = document.getElementById('conversationSearchInput');
+
+        function isMobile() {
+            return window.innerWidth < 768;
+        }
+
+        function isSidebarOpen() {
+            if (!chatSidebar) return false;
+            if (isMobile()) {
+                return chatSidebar.classList.contains('mobile-open');
+            }
+            return !chatSidebar.classList.contains('collapsed');
+        }
+
+        function updateSidebarUI(isOpen) {
+            if (!toggleSidebarBtn) return;
+            if (isOpen) {
+                toggleSidebarBtn.setAttribute('title', 'Hide Sidebar');
+                toggleSidebarBtn.setAttribute('aria-expanded', 'true');
+                if (toggleSidebarIcon) toggleSidebarIcon.className = 'bi bi-layout-sidebar-inset';
+                if (toggleSidebarText) toggleSidebarText.textContent = 'Sidebar';
+            } else {
+                toggleSidebarBtn.setAttribute('title', 'Show Sidebar');
+                toggleSidebarBtn.setAttribute('aria-expanded', 'false');
+                if (toggleSidebarIcon) toggleSidebarIcon.className = 'bi bi-layout-sidebar';
+                if (toggleSidebarText) toggleSidebarText.textContent = 'Sidebar';
+            }
+        }
+
+        function setSidebarState(open) {
+            if (!chatSidebar) return;
+            const mobile = isMobile();
+
+            if (open) {
+                if (mobile) {
+                    chatSidebar.classList.add('mobile-open');
+                    chatSidebar.classList.remove('collapsed');
+                    if (chatSidebarBackdrop) chatSidebarBackdrop.classList.add('show');
+                } else {
+                    chatSidebar.classList.remove('collapsed');
+                    localStorage.setItem('chat_sidebar_collapsed', '0');
+                }
+                updateSidebarUI(true);
+            } else {
+                if (mobile) {
+                    chatSidebar.classList.remove('mobile-open');
+                    chatSidebar.classList.add('collapsed');
+                    if (chatSidebarBackdrop) chatSidebarBackdrop.classList.remove('show');
+                } else {
+                    chatSidebar.classList.add('collapsed');
+                    localStorage.setItem('chat_sidebar_collapsed', '1');
+                }
+                updateSidebarUI(false);
+            }
+        }
+
+        if (toggleSidebarBtn && chatSidebar) {
+            toggleSidebarBtn.addEventListener('click', function () {
+                setSidebarState(!isSidebarOpen());
+            });
+        }
+
+        if (chatSidebarBackdrop) {
+            chatSidebarBackdrop.addEventListener('click', function () {
+                setSidebarState(false);
+            });
+        }
+
+        // Initialize state on page load
+        if (chatSidebar) {
+            if (isMobile()) {
+                setSidebarState(false);
+            } else {
+                const isSavedCollapsed = localStorage.getItem('chat_sidebar_collapsed') === '1';
+                setSidebarState(!isSavedCollapsed);
+            }
+        }
+
+        // Handle responsive resize dynamically
+        window.addEventListener('resize', function () {
+            if (!chatSidebar) return;
+            if (isMobile()) {
+                if (!chatSidebar.classList.contains('mobile-open')) {
+                    setSidebarState(false);
+                }
+            } else {
+                if (chatSidebarBackdrop) chatSidebarBackdrop.classList.remove('show');
+                chatSidebar.classList.remove('mobile-open');
+                const isSavedCollapsed = localStorage.getItem('chat_sidebar_collapsed') === '1';
+                setSidebarState(!isSavedCollapsed);
+            }
+        });
+
+        // Conversations Search Filtering
+        if (searchInput) {
+            searchInput.addEventListener('input', function () {
+                const query = this.value.toLowerCase().trim();
+                const rows = document.querySelectorAll('#sessionListDesktop .session-wrapper');
+                const tags = document.querySelectorAll('#sessionListDesktop .session-header-tag');
+
+                rows.forEach(row => {
+                    const title = row.getAttribute('data-session-title') || '';
+                    if (!query || title.includes(query)) {
+                        row.classList.remove('d-none');
+                    } else {
+                        row.classList.add('d-none');
+                    }
+                });
+
+                tags.forEach(tag => {
+                    if (query) {
+                        tag.classList.add('d-none');
+                    } else {
+                        tag.classList.remove('d-none');
+                    }
+                });
+            });
+        }
+    })();
+</script>
+
 @if($activeSession)
 <script>
     const sessionId = {{ $activeSession->id }};
@@ -741,89 +891,6 @@
     const pinUrl = "{{ route('chat.pin', $activeSession) }}";
     const regenerateUrl = "{{ route('chat.regenerate', $activeSession) }}";
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-
-    // Sidebar Collapse / Expand Toggle
-    const chatSidebar = document.getElementById('chatSidebar');
-    const toggleSidebarBtn = document.getElementById('toggleSidebarBtn');
-    const collapseSidebarBtn = document.getElementById('collapseSidebarBtn');
-
-    function setSidebarCollapsed(collapsed) {
-        if (!chatSidebar) return;
-        if (collapsed) {
-            chatSidebar.classList.add('collapsed');
-            localStorage.setItem('chat_sidebar_collapsed', '1');
-            if (toggleSidebarBtn) {
-                toggleSidebarBtn.innerHTML = '<i class="bi bi-layout-sidebar"></i> <span class="small d-none d-lg-inline">Show Sidebar</span>';
-            }
-        } else {
-            chatSidebar.classList.remove('collapsed');
-            localStorage.setItem('chat_sidebar_collapsed', '0');
-            if (toggleSidebarBtn) {
-                toggleSidebarBtn.innerHTML = '<i class="bi bi-layout-sidebar-inset"></i> <span class="small d-none d-lg-inline">Sidebar</span>';
-            }
-        }
-    }
-
-    if (toggleSidebarBtn && chatSidebar) {
-        toggleSidebarBtn.addEventListener('click', function () {
-            const isCurrentlyCollapsed = chatSidebar.classList.contains('collapsed');
-            setSidebarCollapsed(!isCurrentlyCollapsed);
-        });
-    }
-
-    if (collapseSidebarBtn && chatSidebar) {
-        collapseSidebarBtn.addEventListener('click', function () {
-            setSidebarCollapsed(true);
-        });
-    }
-
-    // Restore sidebar state from local storage
-    if (localStorage.getItem('chat_sidebar_collapsed') === '1' && chatSidebar) {
-        setSidebarCollapsed(true);
-    }
-
-    // Conversations Search Filtering (Desktop)
-    const searchInput = document.getElementById('conversationSearchInput');
-    if (searchInput) {
-        searchInput.addEventListener('input', function () {
-            const query = this.value.toLowerCase().trim();
-            const rows = document.querySelectorAll('#sessionListDesktop .session-wrapper');
-            const tags = document.querySelectorAll('#sessionListDesktop .session-header-tag');
-
-            rows.forEach(row => {
-                const title = row.getAttribute('data-session-title') || '';
-                if (!query || title.includes(query)) {
-                    row.classList.remove('d-none');
-                } else {
-                    row.classList.add('d-none');
-                }
-            });
-
-            tags.forEach(tag => {
-                if (query) {
-                    tag.classList.add('d-none');
-                } else {
-                    tag.classList.remove('d-none');
-                }
-            });
-        });
-    }
-
-    // Conversations Search Filtering (Mobile)
-    const mobileSearchInput = document.getElementById('mobileConversationSearchInput');
-    if (mobileSearchInput) {
-        mobileSearchInput.addEventListener('input', function () {
-            const query = this.value.toLowerCase().trim();
-            document.querySelectorAll('#mobileSessionList .mobile-session-row').forEach(row => {
-                const title = row.getAttribute('data-session-title') || '';
-                if (!query || title.includes(query)) {
-                    row.classList.remove('d-none');
-                } else {
-                    row.classList.add('d-none');
-                }
-            });
-        });
-    }
 
     // 1. Markdown Rendering & Syntax Highlighting with "Copy Code" button
     function renderMarkdown(element) {
