@@ -188,7 +188,7 @@
                 {{ $session->messages->count() }} Message(s) Logged
             </span>
         </div>
-        <div class="card-body p-4 bg-light">
+        <div class="card-body p-4 bg-body-secondary">
             <div class="transcript-container">
                 @forelse($session->messages as $msg)
                     @if($msg->role === 'user')

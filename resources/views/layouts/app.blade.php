@@ -58,6 +58,13 @@
         [data-bs-theme="dark"] .bg-white {
             background-color: #1e293b !important;
         }
+        [data-bs-theme="dark"] .bg-light {
+            background-color: #1e293b !important;
+            color: #f1f5f9 !important;
+        }
+        [data-bs-theme="dark"] .bg-light.text-dark {
+            color: #f1f5f9 !important;
+        }
         [data-bs-theme="dark"] .card {
             background-color: #1e293b;
             border-color: #334155 !important;
