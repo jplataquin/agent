@@ -462,13 +462,213 @@
             display: none !important;
         }
     }
+
+    /* Chat Toast Notifications (Absolute, High z-index, Non-nudging) */
+    .chat-toast-container {
+        position: absolute !important;
+        top: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 9999 !important;
+        width: calc(100% - 32px);
+        max-width: 480px;
+        pointer-events: none;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .chat-toast,
+    .toast-notification {
+        position: absolute !important;
+        top: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 9999 !important;
+        width: calc(100% - 32px);
+        max-width: 480px;
+        pointer-events: auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 16px;
+        border-radius: 12px;
+        background: #ffffff;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+        border: 1px solid #e2e8f0;
+        font-size: 0.9rem;
+        line-height: 1.4;
+        transition: opacity 0.25s ease, transform 0.25s ease;
+        animation: toastSlideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .chat-toast-container .chat-toast,
+    .chat-toast-container .toast-notification {
+        position: relative !important;
+        top: auto;
+        left: auto;
+        transform: none;
+        width: 100%;
+    }
+
+    @keyframes toastSlideDown {
+        from {
+            opacity: 0;
+            transform: translateY(-12px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .chat-toast.toast-hiding {
+        opacity: 0 !important;
+        transform: translateY(-8px) !important;
+    }
+
+    .chat-toast.toast-success {
+        background: #f0fdf4;
+        border-color: #bbf7d0;
+        color: #166534;
+    }
+    .chat-toast.toast-danger,
+    .chat-toast.toast-error {
+        background: #fef2f2;
+        border-color: #fecaca;
+        color: #991b1b;
+    }
+    .chat-toast.toast-warning {
+        background: #fffbeb;
+        border-color: #fde68a;
+        color: #92400e;
+    }
+    .chat-toast.toast-info {
+        background: #eff6ff;
+        border-color: #bfdbfe;
+        color: #1e40af;
+    }
+
+    [data-bs-theme="dark"] .chat-toast,
+    [data-bs-theme="dark"] .toast-notification {
+        background: #1e293b;
+        border-color: #334155;
+        color: #f1f5f9;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+    }
+    [data-bs-theme="dark"] .chat-toast.toast-success {
+        background: #064e3b;
+        border-color: #059669;
+        color: #ecfdf5;
+    }
+    [data-bs-theme="dark"] .chat-toast.toast-danger,
+    [data-bs-theme="dark"] .chat-toast.toast-error {
+        background: #7f1d1d;
+        border-color: #dc2626;
+        color: #fef2f2;
+    }
+    [data-bs-theme="dark"] .chat-toast.toast-warning {
+        background: #78350f;
+        border-color: #d97706;
+        color: #fffbeb;
+    }
+    [data-bs-theme="dark"] .chat-toast.toast-info {
+        background: #1e3a8a;
+        border-color: #2563eb;
+        color: #eff6ff;
+    }
+
+    .toast-content {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-grow: 1;
+        min-width: 0;
+    }
+    .toast-message {
+        word-break: break-word;
+        font-weight: 500;
+    }
+    .toast-close-btn {
+        background: transparent;
+        border: none;
+        padding: 4px;
+        margin-left: 10px;
+        color: currentColor;
+        opacity: 0.65;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 6px;
+        transition: opacity 0.15s ease, background-color 0.15s ease;
+        line-height: 1;
+        flex-shrink: 0;
+    }
+    .toast-close-btn:hover {
+        opacity: 1;
+        background-color: rgba(0, 0, 0, 0.08);
+    }
+    [data-bs-theme="dark"] .toast-close-btn:hover {
+        background-color: rgba(255, 255, 255, 0.15);
+    }
 </style>
 @endpush
 
 @section('content')
 <div class="container-fluid px-2 px-md-4">
-    <div class="chat-container shadow-sm">
+    <div class="chat-container shadow-sm position-relative">
         
+        <!-- Toast Notification Container (Absolute, High z-index, Non-nudging) -->
+        <div id="chatToastContainer" class="chat-toast-container toast-container position-absolute" aria-live="polite" aria-atomic="true">
+            @if(session('success'))
+                <div class="chat-toast toast-notification toast-success shadow" role="alert" data-autohide="true">
+                    <div class="toast-content">
+                        <i class="bi bi-check-circle-fill text-success fs-5"></i>
+                        <span class="toast-message">{{ session('success') }}</span>
+                    </div>
+                    <button type="button" class="toast-close-btn btn-close" aria-label="Close"></button>
+                </div>
+            @endif
+            @if(session('error'))
+                <div class="chat-toast toast-notification toast-danger shadow" role="alert" data-autohide="true">
+                    <div class="toast-content">
+                        <i class="bi bi-exclamation-triangle-fill text-danger fs-5"></i>
+                        <span class="toast-message">{{ session('error') }}</span>
+                    </div>
+                    <button type="button" class="toast-close-btn btn-close" aria-label="Close"></button>
+                </div>
+            @endif
+            @if(session('warning'))
+                <div class="chat-toast toast-notification toast-warning shadow" role="alert" data-autohide="true">
+                    <div class="toast-content">
+                        <i class="bi bi-exclamation-circle-fill text-warning fs-5"></i>
+                        <span class="toast-message">{{ session('warning') }}</span>
+                    </div>
+                    <button type="button" class="toast-close-btn btn-close" aria-label="Close"></button>
+                </div>
+            @endif
+            @if(session('info'))
+                <div class="chat-toast toast-notification toast-info shadow" role="alert" data-autohide="true">
+                    <div class="toast-content">
+                        <i class="bi bi-info-circle-fill text-primary fs-5"></i>
+                        <span class="toast-message">{{ session('info') }}</span>
+                    </div>
+                    <button type="button" class="toast-close-btn btn-close" aria-label="Close"></button>
+                </div>
+            @endif
+            @if(session('status'))
+                <div class="chat-toast toast-notification toast-info shadow" role="alert" data-autohide="true">
+                    <div class="toast-content">
+                        <i class="bi bi-info-circle-fill text-primary fs-5"></i>
+                        <span class="toast-message">{{ session('status') }}</span>
+                    </div>
+                    <button type="button" class="toast-close-btn btn-close" aria-label="Close"></button>
+                </div>
+            @endif
+        </div>
+
         <!-- Chat Top Header Bar -->
         <div class="chat-header d-flex align-items-center justify-content-between p-2 p-md-3">
             <div class="d-flex align-items-center gap-2">
@@ -924,6 +1124,99 @@
             });
         }
     })();
+
+    // Toast Notification System (Absolute, High z-index, Auto-dismiss or Close button)
+    window.dismissToast = function(toastEl) {
+        if (!toastEl || toastEl._isDismissed) return;
+        toastEl._isDismissed = true;
+        toastEl.classList.add('toast-hiding');
+        setTimeout(function() {
+            if (toastEl.parentNode) {
+                toastEl.parentNode.removeChild(toastEl);
+            }
+        }, 250);
+    };
+
+    window.showToast = function(message, type = 'info', duration = 4000) {
+        let container = document.getElementById('chatToastContainer');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'chatToastContainer';
+            container.className = 'chat-toast-container toast-container position-absolute';
+            container.setAttribute('aria-live', 'polite');
+            container.setAttribute('aria-atomic', 'true');
+            const targetContainer = document.querySelector('.chat-container') || document.body;
+            targetContainer.appendChild(container);
+        }
+
+        const toast = document.createElement('div');
+        const normalizedType = type === 'error' ? 'danger' : type;
+        toast.className = `chat-toast toast-notification toast-${normalizedType} shadow`;
+        toast.setAttribute('role', 'alert');
+
+        let iconClass = 'bi-info-circle-fill text-primary';
+        if (normalizedType === 'success') iconClass = 'bi-check-circle-fill text-success';
+        else if (normalizedType === 'danger') iconClass = 'bi-exclamation-triangle-fill text-danger';
+        else if (normalizedType === 'warning') iconClass = 'bi-exclamation-circle-fill text-warning';
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        toast.innerHTML = `
+            <div class="toast-content">
+                <i class="bi ${iconClass} fs-5"></i>
+                <span class="toast-message">${escapeHtml(message)}</span>
+            </div>
+            <button type="button" class="toast-close-btn btn-close" aria-label="Close"></button>
+        `;
+
+        const closeBtn = toast.querySelector('.toast-close-btn');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                window.dismissToast(toast);
+            });
+        }
+
+        container.appendChild(toast);
+
+        if (duration > 0) {
+            setTimeout(function() {
+                window.dismissToast(toast);
+            }, duration);
+        }
+
+        return toast;
+    };
+
+    // Auto-dismiss pre-rendered server session toasts & bind close handlers
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('#chatToastContainer .chat-toast').forEach(function(toast) {
+            const closeBtn = toast.querySelector('.toast-close-btn');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.dismissToast(toast);
+                });
+            }
+            if (toast.getAttribute('data-autohide') === 'true') {
+                setTimeout(function() {
+                    window.dismissToast(toast);
+                }, 4000);
+            }
+        });
+    });
+
+    // Fallback: route any legacy window.alert calls in /chat to showToast
+    window.alert = function(msg) {
+        window.showToast(msg, 'info');
+    };
 </script>
 
 @if($activeSession)
@@ -986,7 +1279,9 @@
         if (!el) return;
         const text = el.innerText;
         navigator.clipboard.writeText(text).then(() => {
-            alert('Response copied to clipboard!');
+            window.showToast('Response copied to clipboard!', 'success');
+        }).catch(() => {
+            window.showToast('Failed to copy text to clipboard.', 'danger');
         });
     };
 
@@ -996,7 +1291,7 @@
 
     window.toggleSpeakMessage = function(contentId, btn) {
         if (!('speechSynthesis' in window)) {
-            alert('Text-to-Speech is not supported by your browser.');
+            window.showToast('Text-to-Speech is not supported by your browser.', 'warning');
             return;
         }
 
@@ -1047,6 +1342,7 @@
             btn.classList.remove('speaking');
             btn.innerHTML = '<i class="bi bi-volume-up"></i> <span>Listen</span>';
             currentSpeechBtn = null;
+            window.showToast('An error occurred during audio playback.', 'danger');
         };
 
         window.speechSynthesis.speak(utterance);
@@ -1068,8 +1364,16 @@
             parent.querySelectorAll('.action-btn').forEach(b => {
                 b.classList.remove('active-like', 'active-dislike');
             });
-            if (data.feedback === 'like') btn.classList.add('active-like');
-            if (data.feedback === 'dislike') btn.classList.add('active-dislike');
+            if (data.feedback === 'like') {
+                btn.classList.add('active-like');
+                window.showToast('Feedback submitted: Good response.', 'success');
+            }
+            if (data.feedback === 'dislike') {
+                btn.classList.add('active-dislike');
+                window.showToast('Feedback submitted: Bad response.', 'info');
+            }
+        }).catch(err => {
+            window.showToast('Failed to submit feedback.', 'danger');
         });
     };
 
@@ -1090,7 +1394,7 @@
             location.reload();
         }).catch(err => {
             typingIndicator.classList.add('d-none');
-            alert('Failed to regenerate response.');
+            window.showToast('Failed to regenerate response.', 'danger');
         });
     };
 
@@ -1125,7 +1429,7 @@
             location.reload();
         }).catch(err => {
             typingIndicator.classList.add('d-none');
-            alert('Error updating message.');
+            window.showToast('Error updating message.', 'danger');
         });
     };
 
@@ -1139,6 +1443,8 @@
             }
         }).then(res => res.json()).then(data => {
             location.reload();
+        }).catch(err => {
+            window.showToast('Failed to update pin state.', 'danger');
         });
     };
 
@@ -1173,6 +1479,9 @@
                 document.getElementById('activeHeaderTitle').textContent = data.title;
             }
             cancelInlineRename(sid);
+            window.showToast('Conversation renamed.', 'success');
+        }).catch(err => {
+            window.showToast('Failed to rename conversation.', 'danger');
         });
     };
 
@@ -1256,12 +1565,13 @@
                         recognition.start();
                     } catch (err) {
                         console.error('Speech recognition start failed:', err);
+                        window.showToast('Failed to start speech recognition: ' + err.message, 'danger');
                     }
                 }
             });
         } else {
             micBtn.addEventListener('click', function() {
-                alert('Speech-to-Text is not supported in this browser. Please use Google Chrome, Microsoft Edge, or Safari.');
+                window.showToast('Speech-to-Text is not supported in this browser. Please use Google Chrome, Microsoft Edge, or Safari.', 'warning');
             });
         }
 
@@ -1364,6 +1674,8 @@
                 input.disabled = false;
                 sendBtn.disabled = false;
                 input.focus();
+
+                window.showToast(err.message || 'Failed to send message. Please try again.', 'danger');
 
                 const assistantRow = document.createElement('div');
                 assistantRow.className = 'message-row assistant-row';
