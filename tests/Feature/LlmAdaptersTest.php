@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\ChatSession;
+use App\Models\LlmLog;
 use App\Models\LlmProvider;
 use App\Models\User;
+use App\Services\AiAgentService;
 use App\Services\Llm\AnthropicAdapter;
 use App\Services\Llm\GeminiAdapter;
 use App\Services\Llm\LlmAdapterFactory;
@@ -395,7 +397,7 @@ class LlmAdaptersTest extends TestCase
             $emittedChunk = $text;
         };
 
-        $service = app(\App\Services\AiAgentService::class);
+        $service = app(AiAgentService::class);
         $result = $service->generateResponse($session, $onChunk);
 
         $this->assertNotNull($emittedChunk);
@@ -421,7 +423,7 @@ class LlmAdaptersTest extends TestCase
             'is_active' => true,
         ]);
 
-        $log = \App\Models\LlmLog::record(
+        $log = LlmLog::record(
             provider: $provider,
             endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=AIzaSySecretApiKey123',
             httpMethod: 'POST',
@@ -444,7 +446,7 @@ class LlmAdaptersTest extends TestCase
         $admin = User::where('role', User::ROLE_ADMIN)->first();
         $provider = LlmProvider::first();
 
-        \App\Models\LlmLog::record(
+        LlmLog::record(
             provider: $provider,
             endpoint: 'https://api.openai.com/v1/chat/completions',
             httpMethod: 'POST',
@@ -480,5 +482,210 @@ class LlmAdaptersTest extends TestCase
         $deleteResponse = $this->actingAs($admin)->delete("/admin/llm-providers/{$provider->id}/logs");
         $deleteResponse->assertSessionHas('success');
         $this->assertEquals(0, $provider->logs()->count());
+    }
+
+    public function test_gemini_adapter_captures_thought_signature_from_tool_call_response()
+    {
+        $provider = LlmProvider::create([
+            'name' => 'Gemini 2.0 Flash Thinking',
+            'provider_type' => 'gemini',
+            'api_key' => 'live_gemini_key_thinking',
+            'model' => 'gemini-2.0-flash-thinking-exp',
+            'temperature' => 0.7,
+            'is_default' => false,
+            'is_active' => true,
+        ]);
+
+        Http::fake([
+            'https://generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [
+                    [
+                        'content' => [
+                            'parts' => [
+                                [
+                                    'thought' => true,
+                                    'text' => 'Thinking through the user request...',
+                                ],
+                                [
+                                    'functionCall' => [
+                                        'name' => 'query_database',
+                                        'args' => ['sql' => 'SELECT 1;'],
+                                    ],
+                                    'thought_signature' => 'mock_thought_sig_xyz789',
+                                ],
+                            ],
+                            'role' => 'model',
+                        ],
+                    ],
+                ],
+                'usageMetadata' => [
+                    'promptTokenCount' => 110,
+                    'candidatesTokenCount' => 45,
+                ],
+            ], 200),
+        ]);
+
+        $adapter = app(GeminiAdapter::class);
+        $response = $adapter->send(
+            $provider,
+            'System Prompt',
+            [['role' => 'user', 'content' => 'Run the test query']],
+            []
+        );
+
+        $this->assertFalse($response->isError());
+        $this->assertTrue($response->hasToolCalls());
+        $this->assertCount(1, $response->toolCalls);
+        $this->assertEquals('query_database', $response->toolCalls[0]['name']);
+        $this->assertEquals('mock_thought_sig_xyz789', $response->toolCalls[0]['thought_signature']);
+    }
+
+    public function test_gemini_adapter_includes_thought_signature_in_outbound_function_call_parts()
+    {
+        $provider = LlmProvider::create([
+            'name' => 'Gemini Thinking Outbound',
+            'provider_type' => 'gemini',
+            'api_key' => 'live_gemini_key_outbound',
+            'model' => 'gemini-2.0-flash-thinking-exp',
+            'temperature' => 0.7,
+            'is_default' => false,
+            'is_active' => true,
+        ]);
+
+        $recordedPayload = null;
+        Http::fake([
+            'https://generativelanguage.googleapis.com/*' => function ($request) use (&$recordedPayload) {
+                $recordedPayload = $request->data();
+
+                return Http::response([
+                    'candidates' => [
+                        [
+                            'content' => [
+                                'parts' => [
+                                    ['text' => 'Tool execution finished successfully.'],
+                                ],
+                                'role' => 'model',
+                            ],
+                        ],
+                    ],
+                ], 200);
+            },
+        ]);
+
+        $adapter = app(GeminiAdapter::class);
+        $adapter->send(
+            $provider,
+            'System Prompt',
+            [
+                ['role' => 'user', 'content' => 'Please query our database'],
+                [
+                    'role' => 'assistant',
+                    'content' => null,
+                    'tool_calls' => [
+                        [
+                            'id' => 'call_12345',
+                            'name' => 'query_database',
+                            'arguments' => ['sql' => 'SELECT 1;'],
+                            'thought_signature' => 'mock_thought_sig_xyz789',
+                        ],
+                    ],
+                ],
+                [
+                    'role' => 'tool',
+                    'tool_name' => 'query_database',
+                    'tool_call_id' => 'call_12345',
+                    'content' => 'Result: 1',
+                ],
+            ],
+            []
+        );
+
+        $this->assertNotNull($recordedPayload);
+        $contents = $recordedPayload['contents'];
+
+        // Should alternate: user -> model (with thought_signature) -> user (tool response)
+        $this->assertCount(3, $contents);
+        $this->assertEquals('user', $contents[0]['role']);
+        $this->assertEquals('model', $contents[1]['role']);
+        $this->assertEquals('user', $contents[2]['role']);
+
+        $modelPart = $contents[1]['parts'][0];
+        $this->assertArrayHasKey('functionCall', $modelPart);
+        $this->assertEquals('query_database', $modelPart['functionCall']['name']);
+        $this->assertArrayHasKey('thought_signature', $modelPart);
+        $this->assertEquals('mock_thought_sig_xyz789', $modelPart['thought_signature']);
+    }
+
+    public function test_openai_adapter_sanitizes_foreign_thought_signature_from_tool_calls()
+    {
+        $provider = LlmProvider::create([
+            'name' => 'OpenAI GPT-4o',
+            'provider_type' => 'openai',
+            'api_key' => 'sk-live-test-key-openai',
+            'model' => 'gpt-4o',
+            'temperature' => 0.5,
+            'is_default' => false,
+            'is_active' => true,
+        ]);
+
+        $recordedPayload = null;
+        Http::fake([
+            'https://api.openai.com/v1/chat/completions' => function ($request) use (&$recordedPayload) {
+                $recordedPayload = $request->data();
+
+                return Http::response([
+                    'choices' => [
+                        [
+                            'message' => [
+                                'role' => 'assistant',
+                                'content' => 'Final answer from GPT-4o.',
+                            ],
+                        ],
+                    ],
+                    'usage' => [
+                        'prompt_tokens' => 50,
+                        'completion_tokens' => 20,
+                    ],
+                ], 200);
+            },
+        ]);
+
+        $adapter = app(OpenAiAdapter::class);
+        $adapter->send(
+            $provider,
+            'System instructions',
+            [
+                ['role' => 'user', 'content' => 'Hello'],
+                [
+                    'role' => 'assistant',
+                    'content' => null,
+                    'tool_calls' => [
+                        [
+                            'id' => 'call_gemini_123',
+                            'name' => 'some_tool',
+                            'arguments' => ['foo' => 'bar'],
+                            'thought_signature' => 'sig_from_gemini_should_be_stripped',
+                        ],
+                    ],
+                ],
+                [
+                    'role' => 'tool',
+                    'tool_call_id' => 'call_gemini_123',
+                    'content' => 'Output from tool',
+                ],
+            ],
+            []
+        );
+
+        $this->assertNotNull($recordedPayload);
+        $assistantMsg = $recordedPayload['messages'][2]; // [0] = system, [1] = user, [2] = assistant
+        $this->assertEquals('assistant', $assistantMsg['role']);
+        $this->assertArrayHasKey('tool_calls', $assistantMsg);
+
+        $tc = $assistantMsg['tool_calls'][0];
+        $this->assertEquals('call_gemini_123', $tc['id']);
+        $this->assertEquals('function', $tc['type']);
+        $this->assertEquals('some_tool', $tc['function']['name']);
+        $this->assertArrayNotHasKey('thought_signature', $tc);
     }
 }

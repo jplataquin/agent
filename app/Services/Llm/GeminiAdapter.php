@@ -58,12 +58,25 @@ class GeminiAdapter implements LlmAdapterInterface
                     foreach ($msg['tool_calls'] as $tc) {
                         $rawArgs = $tc['function']['arguments'] ?? $tc['arguments'] ?? [];
                         $args = is_array($rawArgs) ? $rawArgs : json_decode($rawArgs, true) ?? [];
-                        $parts[] = [
+                        $part = [
                             'functionCall' => [
                                 'name' => $tc['function']['name'] ?? $tc['name'] ?? '',
                                 'args' => (object) $args,
                             ],
                         ];
+
+                        $thoughtSig = $tc['thought_signature']
+                            ?? $tc['thoughtSignature']
+                            ?? ($tc['function']['thought_signature'] ?? null)
+                            ?? ($tc['function']['thoughtSignature'] ?? null)
+                            ?? ($msg['thought_signature'] ?? null)
+                            ?? ($msg['thoughtSignature'] ?? null);
+
+                        if (! empty($thoughtSig)) {
+                            $part['thought_signature'] = $thoughtSig;
+                        }
+
+                        $parts[] = $part;
                     }
                 }
                 $rawContents[] = [
@@ -234,26 +247,62 @@ class GeminiAdapter implements LlmAdapterInterface
             $usage = $data['usageMetadata'] ?? [];
 
             $textContent = '';
+            $thoughtContent = '';
             $toolCalls = [];
+
+            // Detect any candidate-level or content-level thought signature
+            $candidateThoughtSig = $candidate['thought_signature']
+                ?? $candidate['thoughtSignature']
+                ?? ($candidate['content']['thought_signature'] ?? null)
+                ?? ($candidate['content']['thoughtSignature'] ?? null);
+
+            $lastThoughtSig = $candidateThoughtSig;
+            foreach ($parts as $p) {
+                if (! empty($p['thought_signature'])) {
+                    $lastThoughtSig = $p['thought_signature'];
+                } elseif (! empty($p['thoughtSignature'])) {
+                    $lastThoughtSig = $p['thoughtSignature'];
+                }
+            }
 
             foreach ($parts as $p) {
                 if (! empty($p['text'])) {
-                    $textContent .= $p['text'];
+                    if (empty($p['thought'])) {
+                        $textContent .= $p['text'];
+                    } else {
+                        $thoughtContent .= $p['text'];
+                    }
                 }
                 if (! empty($p['functionCall'])) {
                     $fc = $p['functionCall'];
-                    $toolCalls[] = [
+                    $sig = $p['thought_signature']
+                        ?? $p['thoughtSignature']
+                        ?? ($fc['thought_signature'] ?? null)
+                        ?? ($fc['thoughtSignature'] ?? null)
+                        ?? $lastThoughtSig;
+
+                    $callData = [
                         'id' => 'call_'.uniqid(),
                         'name' => $fc['name'] ?? '',
                         'arguments' => (array) ($fc['args'] ?? []),
                     ];
+
+                    if (! empty($sig)) {
+                        $callData['thought_signature'] = $sig;
+                    }
+
+                    $toolCalls[] = $callData;
                 }
             }
 
             if (empty($textContent) && empty($toolCalls)) {
-                $finishReason = $candidate['finishReason'] ?? 'STOP';
-                if ($finishReason !== 'STOP') {
-                    $textContent = "*(Gemini completed with status: {$finishReason})*";
+                if (! empty($thoughtContent)) {
+                    $textContent = $thoughtContent;
+                } else {
+                    $finishReason = $candidate['finishReason'] ?? 'STOP';
+                    if ($finishReason !== 'STOP') {
+                        $textContent = "*(Gemini completed with status: {$finishReason})*";
+                    }
                 }
             }
 

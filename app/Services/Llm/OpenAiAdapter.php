@@ -51,7 +51,22 @@ class OpenAiAdapter implements LlmAdapterInterface
                 $entry['tool_call_id'] = $msg['tool_call_id'] ?? '';
             }
             if ($msg['role'] === 'assistant' && ! empty($msg['tool_calls'])) {
-                $entry['tool_calls'] = $msg['tool_calls'];
+                $cleanToolCalls = [];
+                foreach ($msg['tool_calls'] as $tc) {
+                    $funcName = $tc['function']['name'] ?? $tc['name'] ?? '';
+                    $rawArgs = $tc['function']['arguments'] ?? $tc['arguments'] ?? [];
+                    $argsJson = is_string($rawArgs) ? $rawArgs : json_encode($rawArgs ?: (object) []);
+
+                    $cleanToolCalls[] = [
+                        'id' => $tc['id'] ?? 'call_'.uniqid(),
+                        'type' => 'function',
+                        'function' => [
+                            'name' => $funcName,
+                            'arguments' => $argsJson,
+                        ],
+                    ];
+                }
+                $entry['tool_calls'] = $cleanToolCalls;
                 $entry['content'] = $msg['content'] ?? '';
             }
             $formattedMessages[] = $entry;
