@@ -162,6 +162,17 @@ class ChatTest extends TestCase
         $this->assertNotFalse($micPos);
         $this->assertNotFalse($sendPos);
         $this->assertLessThan($sendPos, $micPos, 'Mic button must appear before send button.');
+
+        // Verify sendBtn is type="button" to prevent native form submission aborts
+        $this->assertStringContainsString('<button type="button" id="sendBtn"', $html);
+
+        // Verify chatForm has safe action and onsubmit preventDefault
+        $this->assertStringContainsString('action="javascript:void(0);"', $html);
+        $this->assertStringContainsString('onsubmit="event.preventDefault(); return false;"', $html);
+
+        // Verify messageUrl and streamUrl are relative paths (no host/port) to eliminate CORS and origin mismatch
+        $this->assertStringContainsString('const messageUrl = "/chat/' . $session->id . '/message";', $html);
+        $this->assertStringContainsString('const streamUrl = "/chat/' . $session->id . '/stream";', $html);
     }
 
     public function test_mcp_tool_results_are_hidden_from_user_in_chat_view_only_llm_reply_visible()

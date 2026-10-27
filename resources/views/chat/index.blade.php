@@ -946,7 +946,7 @@
             <!-- Chat Input Area -->
             @if($activeSession)
                 <div class="chat-input-area" id="chatInputArea">
-                    <form id="chatForm" class="d-flex gap-2 align-items-end">
+                    <form id="chatForm" method="POST" action="javascript:void(0);" onsubmit="event.preventDefault(); return false;" class="d-flex gap-2 align-items-end">
                         @csrf
 
                         <textarea 
@@ -965,7 +965,7 @@
                             </button>
 
                             <!-- Submit Button -->
-                            <button type="submit" id="sendBtn" class="btn btn-primary rounded-circle d-flex align-items-center justify-content-center shadow-sm" style="width: 44px; height: 44px; flex-shrink: 0;" title="Send message">
+                            <button type="button" id="sendBtn" class="btn btn-primary rounded-circle d-flex align-items-center justify-content-center shadow-sm" style="width: 44px; height: 44px; flex-shrink: 0;" title="Send message">
                                 <i class="bi bi-arrow-up-circle-fill fs-5"></i>
                             </button>
                         </div>
@@ -1382,11 +1382,11 @@
 @if($activeSession)
 <script>
     const sessionId = {{ $activeSession->id }};
-    const messageUrl = "{{ route('chat.message', $activeSession) }}";
-    const streamUrl = "{{ route('chat.stream', $activeSession) }}";
-    const renameUrl = "{{ route('chat.rename', $activeSession) }}";
-    const pinUrl = "{{ route('chat.pin', $activeSession) }}";
-    const regenerateUrl = "{{ route('chat.regenerate', $activeSession) }}";
+    const messageUrl = "{{ route('chat.message', $activeSession, false) }}";
+    const streamUrl = "{{ route('chat.stream', $activeSession, false) }}";
+    const renameUrl = "{{ route('chat.rename', $activeSession, false) }}";
+    const pinUrl = "{{ route('chat.pin', $activeSession, false) }}";
+    const regenerateUrl = "{{ route('chat.regenerate', $activeSession, false) }}";
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
     // 1. Markdown Rendering & Syntax Highlighting with "Copy Code" button
@@ -1614,13 +1614,6 @@
             this.style.height = (Math.min(this.scrollHeight, 120)) + 'px';
         });
 
-        input.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                form.dispatchEvent(new Event('submit'));
-            }
-        });
-
         // Speech-to-Text (STT) implementation
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         let recognition = null;
@@ -1683,8 +1676,7 @@
             });
         }
 
-        form.addEventListener('submit', function (e) {
-            e.preventDefault();
+        function submitMessage() {
             const text = input.value.trim();
             if (!text) return;
 
@@ -1702,7 +1694,10 @@
             // Append User Message to UI
             const userRow = document.createElement('div');
             userRow.className = 'message-row user-row';
-            userRow.innerHTML = `<div class="message-bubble message-user">${text}</div>`;
+            const userBubble = document.createElement('div');
+            userBubble.className = 'message-bubble message-user';
+            userBubble.textContent = text;
+            userRow.appendChild(userBubble);
             messagesContainer.insertBefore(userRow, typingIndicator);
             scrollToBottom();
 
@@ -1794,6 +1789,28 @@
                 messagesContainer.insertBefore(assistantRow, typingIndicator);
                 scrollToBottom();
             });
+        }
+
+        // Wire event listeners cleanly to submitMessage to eliminate native navigation aborts
+        input.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                e.stopPropagation();
+                submitMessage();
+            }
+        });
+
+        sendBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            submitMessage();
+        });
+
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            submitMessage();
+            return false;
         });
     });
 </script>
