@@ -118,14 +118,14 @@
                         <div class="modal fade" id="toolsModal-{{ $server->id }}" tabindex="-1" aria-labelledby="toolsModalLabel-{{ $server->id }}" aria-hidden="true">
                             <div class="modal-dialog modal-dialog-centered modal-lg">
                                 <div class="modal-content border-0 shadow">
-                                    <div class="modal-header bg-light">
+                                    <div class="modal-header">
                                         <h5 class="modal-title fw-bold" id="toolsModalLabel-{{ $server->id }}">
                                             <i class="bi bi-tools text-primary me-2"></i>{{ $server->name }} &mdash; Discovered Tools
                                         </h5>
                                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                     </div>
                                     <div class="modal-body p-4">
-                                        <div class="d-flex justify-content-between align-items-center mb-3 p-2 bg-light rounded-3 small">
+                                        <div class="d-flex justify-content-between align-items-center mb-3 p-2 rounded-3 small">
                                             <div>
                                                 <span class="text-muted">Endpoint:</span> <code>{{ $server->endpoint_url }}</code>
                                             </div>
@@ -148,7 +148,7 @@
                                                                 $props = $schema['properties'] ?? [];
                                                             @endphp
                                                             @if(is_array($props) && count($props) > 0)
-                                                                <div class="small bg-light p-2 rounded border">
+                                                                <div class="small p-2 rounded border">
                                                                     <span class="fw-semibold text-secondary">Parameters:</span>
                                                                     <ul class="mb-0 ps-3 mt-1 font-monospace" style="font-size: 0.8rem;">
                                                                         @foreach($props as $propName => $propDef)
@@ -173,7 +173,7 @@
                                             @endif
                                         </div>
                                     </div>
-                                    <div class="modal-footer bg-light">
+                                    <div class="modal-footer">
                                         <button type="button" class="btn btn-secondary btn-sm rounded-pill" data-bs-dismiss="modal">Close</button>
                                     </div>
                                 </div>
@@ -256,7 +256,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                 let propsHtml = '';
                                 if (propKeys.length > 0) {
                                     propsHtml = `
-                                        <div class="small bg-light p-2 rounded border mt-2">
+                                        <div class="small p-2 rounded border mt-2">
                                             <span class="fw-semibold text-secondary">Parameters:</span>
                                             <ul class="mb-0 ps-3 mt-1 font-monospace" style="font-size: 0.8rem;">
                                                 ${propKeys.map(k => `<li><strong>${k}</strong> <span class="text-muted">(${props[k].type || 'any'})</span>: ${props[k].description || ''}</li>`).join('')}
