@@ -74,6 +74,9 @@ class GeminiAdapter implements LlmAdapterInterface
 
                         if (! empty($thoughtSig)) {
                             $part['thought_signature'] = $thoughtSig;
+                        } else {
+                            // Fallback for legacy messages to satisfy Gemini API signature requirements
+                            $part['thought_signature'] = 'skip_thought_signature_validator';
                         }
 
                         $parts[] = $part;
