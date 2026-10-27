@@ -109,14 +109,7 @@
         box-shadow: 0 1px 4px rgba(0,0,0,0.04);
     }
     .message-tool {
-        background-color: #f1f5f9;
-        color: #475569;
-        border-left: 3px solid #6366f1;
-        font-family: monospace;
-        font-size: 0.85rem;
-        max-width: 90%;
-        border-radius: 8px;
-        padding: 10px 14px;
+        display: none !important;
     }
 
     /* Message Action Bar */
@@ -902,6 +895,7 @@
                             </div>
 
                         @elseif($message->role === 'assistant')
+                            @if(!empty($message->content))
                             <div class="message-row assistant-row" id="msg-row-{{ $message->id }}">
                                 <div class="message-bubble message-assistant markdown-body" id="assistant-content-{{ $message->id }}" data-raw-content="{{ e($message->content) }}">
                                     {!! $message->content !!}
@@ -926,14 +920,7 @@
                                     </button>
                                 </div>
                             </div>
-
-                        @elseif($message->role === 'tool')
-                            <div class="message-row assistant-row">
-                                <div class="message-tool">
-                                    <div class="fw-bold mb-1"><i class="bi bi-gear-wide-connected me-1"></i> MCP System Result:</div>
-                                    <pre class="mb-0 text-wrap">{{ $message->content }}</pre>
-                                </div>
-                            </div>
+                            @endif
                         @endif
                     @empty
                         <div class="text-center text-muted my-auto py-5" id="emptyState">
