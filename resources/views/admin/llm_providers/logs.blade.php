@@ -95,7 +95,7 @@
                                 @elseif($log->action === 'connection_test')
                                     <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">Connection Test</span>
                                 @else
-                                    <span class="badge bg-light text-dark border">{{ $log->action }}</span>
+                                    <span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">{{ $log->action }}</span>
                                 @endif
                             </td>
                             <td>
@@ -149,7 +149,7 @@
                                                 Status: {{ $log->status_code ?: 'Error' }}
                                             </span>
                                             <span class="badge bg-secondary ms-1">Latency: {{ $log->latency_ms }}ms</span>
-                                            <span class="badge bg-light text-dark border ms-1">{{ $log->created_at->toDateTimeString() }}</span>
+                                            <span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle ms-1">{{ $log->created_at->toDateTimeString() }}</span>
                                         </div>
                                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                     </div>
@@ -157,7 +157,7 @@
                                         <!-- Endpoint & Details -->
                                         <div class="mb-3">
                                             <label class="form-label fw-bold text-muted small text-uppercase">Endpoint URL</label>
-                                            <div class="p-2 bg-light rounded font-monospace small text-break">
+                                            <div class="p-2 bg-body-secondary rounded font-monospace small text-break">
                                                 <span class="badge bg-dark me-1">{{ $log->http_method }}</span> {{ $log->endpoint }}
                                             </div>
                                         </div>

@@ -752,10 +752,10 @@
             <!-- Search Chats Input -->
             <div class="mb-2">
                 <div class="input-group input-group-sm">
-                    <span class="input-group-text bg-light border-end-0 text-muted ps-2 pe-1">
+                    <span class="input-group-text bg-body-secondary border-end-0 text-muted ps-2 pe-1">
                         <i class="bi bi-search"></i>
                     </span>
-                    <input type="text" id="conversationSearchInput" class="form-control form-control-sm bg-light border-start-0" placeholder="Filter conversations..." autocomplete="off">
+                    <input type="text" id="conversationSearchInput" class="form-control form-control-sm bg-body-secondary border-start-0" placeholder="Filter conversations..." autocomplete="off">
                 </div>
             </div>
 
@@ -905,7 +905,7 @@
                                 <div class="user-edit-box d-none w-75 mt-2" id="user-edit-box-{{ $message->id }}">
                                     <textarea class="form-control mb-2 rounded-3" id="edit-textarea-{{ $message->id }}" rows="2">{{ $message->content }}</textarea>
                                     <div class="d-flex justify-content-end gap-2">
-                                        <button class="btn btn-sm btn-light border" onclick="cancelEditUserPrompt({{ $message->id }})">Cancel</button>
+                                        <button class="btn btn-sm btn-outline-secondary" onclick="cancelEditUserPrompt({{ $message->id }})">Cancel</button>
                                         <button class="btn btn-sm btn-primary" onclick="submitEditUserPrompt({{ $message->id }})">Update &amp; Send</button>
                                     </div>
                                 </div>

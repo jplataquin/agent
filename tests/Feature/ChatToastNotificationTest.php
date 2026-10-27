@@ -124,4 +124,27 @@ class ChatToastNotificationTest extends TestCase
         $response->assertSee('alert alert-success alert-dismissible', false);
         $response->assertSee('Admin operation completed');
     }
+
+    public function test_no_bg_light_class_in_blade_views_and_dark_mode_override_defined()
+    {
+        // 1. Verify layouts/app.blade.php contains dark mode overrides for bg-light
+        $layoutContent = file_get_contents(resource_path('views/layouts/app.blade.php'));
+        $this->assertStringContainsString('[data-bs-theme="dark"] .bg-light', $layoutContent);
+
+        // 2. Scan all blade views (excluding the dark theme CSS rule in app.blade.php itself)
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(resource_path('views')));
+        foreach ($files as $file) {
+            if ($file->isFile() && str_ends_with($file->getFilename(), '.blade.php')) {
+                if ($file->getFilename() === 'app.blade.php') {
+                    continue;
+                }
+                $content = file_get_contents($file->getPathname());
+                $this->assertDoesNotMatchRegularExpression(
+                    '/\bclass=["\'][^"\']*\bbg-light\b/',
+                    $content,
+                    "File {$file->getPathname()} should not contain bg-light class for dark mode theme compatibility."
+                );
+            }
+        }
+    }
 }
