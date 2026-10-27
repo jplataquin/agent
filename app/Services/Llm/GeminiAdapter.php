@@ -36,15 +36,26 @@ class GeminiAdapter implements LlmAdapterInterface
 
             if ($role === 'tool') {
                 $toolName = $msg['tool_name'] ?? $msg['tool_call_id'] ?? 'tool_result';
+                $rawContent = $msg['content'] ?? '';
+                $decoded = is_string($rawContent) ? json_decode($rawContent, true) : $rawContent;
+
+                if (is_array($decoded)) {
+                    if (! empty($decoded) && array_keys($decoded) === range(0, count($decoded) - 1)) {
+                        $responsePayload = ['result' => $decoded];
+                    } else {
+                        $responsePayload = empty($decoded) ? ['result' => 'ok'] : $decoded;
+                    }
+                } else {
+                    $responsePayload = ['content' => (string) $rawContent];
+                }
+
                 $rawContents[] = [
                     'role' => 'user', // In Gemini REST API, functionResponse has role 'user'
                     'parts' => [
                         [
                             'functionResponse' => [
                                 'name' => $toolName,
-                                'response' => [
-                                    'content' => $msg['content'] ?? '',
-                                ],
+                                'response' => (object) $responsePayload,
                             ],
                         ],
                     ],
@@ -72,11 +83,8 @@ class GeminiAdapter implements LlmAdapterInterface
                             ?? ($msg['thought_signature'] ?? null)
                             ?? ($msg['thoughtSignature'] ?? null);
 
-                        if (! empty($thoughtSig)) {
+                        if (! empty($thoughtSig) && $thoughtSig !== 'skip_thought_signature_validator') {
                             $part['thought_signature'] = $thoughtSig;
-                        } else {
-                            // Fallback for legacy messages to satisfy Gemini API signature requirements
-                            $part['thought_signature'] = 'skip_thought_signature_validator';
                         }
 
                         $parts[] = $part;
@@ -116,10 +124,34 @@ class GeminiAdapter implements LlmAdapterInterface
 
             $lastIdx = count($normalizedContents) - 1;
             if ($lastIdx >= 0 && $normalizedContents[$lastIdx]['role'] === $entry['role']) {
-                $normalizedContents[$lastIdx]['parts'] = array_merge(
-                    $normalizedContents[$lastIdx]['parts'],
-                    $entry['parts']
-                );
+                $lastHasFuncResponse = false;
+                foreach ($normalizedContents[$lastIdx]['parts'] as $p) {
+                    if (isset($p['functionResponse'])) {
+                        $lastHasFuncResponse = true;
+                        break;
+                    }
+                }
+                $incomingHasFuncResponse = false;
+                foreach ($entry['parts'] as $p) {
+                    if (isset($p['functionResponse'])) {
+                        $incomingHasFuncResponse = true;
+                        break;
+                    }
+                }
+
+                // If one turn is a tool functionResponse and the other is user text, do not merge; insert model acknowledgment
+                if ($lastHasFuncResponse !== $incomingHasFuncResponse) {
+                    $normalizedContents[] = [
+                        'role' => 'model',
+                        'parts' => [['text' => 'Tool execution completed.']],
+                    ];
+                    $normalizedContents[] = $entry;
+                } else {
+                    $normalizedContents[$lastIdx]['parts'] = array_merge(
+                        $normalizedContents[$lastIdx]['parts'],
+                        $entry['parts']
+                    );
+                }
             } else {
                 $normalizedContents[] = $entry;
             }
@@ -178,7 +210,8 @@ class GeminiAdapter implements LlmAdapterInterface
         }
 
         $model = $provider->model ?: 'gemini-1.5-flash';
-        $model = preg_replace('/^models\//', '', $model);
+        $model = preg_replace('/^(models\/|google\/)/', '', $model);
+        $model = preg_replace('/:free$/', '', $model);
         if (str_contains(strtolower($model), 'gpt-')) {
             $model = 'gemini-1.5-flash';
         }
@@ -290,7 +323,7 @@ class GeminiAdapter implements LlmAdapterInterface
                         'arguments' => (array) ($fc['args'] ?? []),
                     ];
 
-                    if (! empty($sig)) {
+                    if (! empty($sig) && $sig !== 'skip_thought_signature_validator') {
                         $callData['thought_signature'] = $sig;
                     }
 
@@ -332,7 +365,7 @@ class GeminiAdapter implements LlmAdapterInterface
                 promptTokens: $promptTokens,
                 completionTokens: $completionTokens
             );
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             $latencyMs = (int) round((microtime(true) - $startTime) * 1000);
             Log::error('GeminiAdapter Exception: '.$e->getMessage());
 

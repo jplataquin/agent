@@ -76,6 +76,18 @@ class AiAgentService
                 if (! $toolName && ! empty($lastAssistantToolCalls)) {
                     $toolName = $lastAssistantToolCalls[0]['name'] ?? ($lastAssistantToolCalls[0]['function']['name'] ?? null);
                 }
+                if (! $toolName) {
+                    foreach ($history as $prevMsg) {
+                        if ($prevMsg->role === 'assistant' && ! empty($prevMsg->tool_calls)) {
+                            foreach ($prevMsg->tool_calls as $tc) {
+                                if (($tc['id'] ?? '') === $msg->tool_call_id) {
+                                    $toolName = $tc['name'] ?? ($tc['function']['name'] ?? null);
+                                    break 2;
+                                }
+                            }
+                        }
+                    }
+                }
                 $entry['tool_name'] = $toolName ?: 'mcp_tool';
             } elseif ($msg->role === 'assistant') {
                 $entry['content'] = $msg->content;
@@ -196,7 +208,7 @@ class AiAgentService
                     'content' => $content,
                     'message_id' => $savedMsg->id,
                 ];
-            } catch (Exception $e) {
+            } catch (\Throwable $e) {
                 Log::error('AiAgentService error: '.$e->getMessage());
 
                 return [
@@ -216,13 +228,15 @@ class AiAgentService
     {
         $totalTokens = $promptTokens + $completionTokens;
 
+        $modelName = strtolower((string) ($provider->model ?? ''));
+
         // Model tiered pricing calculation (per 1k tokens)
         $costPer1k = match (true) {
-            str_contains($provider->model, 'gpt-4o-mini') => 0.0003,
-            str_contains($provider->model, 'gpt-4o') => 0.005,
-            str_contains($provider->model, 'claude-3-5') => 0.006,
-            str_contains($provider->model, 'gemini-1.5-flash') => 0.0002,
-            str_contains($provider->model, 'gemini-1.5-pro') => 0.0035,
+            str_contains($modelName, 'gpt-4o-mini') => 0.0003,
+            str_contains($modelName, 'gpt-4o') => 0.005,
+            str_contains($modelName, 'claude-3-5') => 0.006,
+            str_contains($modelName, 'gemini-1.5-flash') => 0.0002,
+            str_contains($modelName, 'gemini-1.5-pro') => 0.0035,
             default => 0.002,
         };
 

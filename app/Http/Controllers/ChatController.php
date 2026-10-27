@@ -166,7 +166,15 @@ class ChatController extends Controller
 
         $session->messages()->where('id', '>', $lastUserMsg->id)->delete();
 
-        $response = $this->aiService->generateResponse($session);
+        try {
+            $response = $this->aiService->generateResponse($session);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('ChatController regenerate error: '.$e->getMessage(), ['exception' => $e]);
+            $response = [
+                'error' => $e->getMessage(),
+                'content' => '⚠️ Error regenerating response: '.$e->getMessage(),
+            ];
+        }
 
         return response()->json([
             'success' => true,
@@ -192,7 +200,15 @@ class ChatController extends Controller
         // Remove all subsequent messages
         $session->messages()->where('id', '>', $message->id)->delete();
 
-        $response = $this->aiService->generateResponse($session);
+        try {
+            $response = $this->aiService->generateResponse($session);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('ChatController editMessage error: '.$e->getMessage(), ['exception' => $e]);
+            $response = [
+                'error' => $e->getMessage(),
+                'content' => '⚠️ Error generating response: '.$e->getMessage(),
+            ];
+        }
 
         return response()->json([
             'success' => true,
@@ -205,6 +221,8 @@ class ChatController extends Controller
      */
     public function sendMessage(Request $request, ChatSession $session)
     {
+        @set_time_limit(120);
+
         if ($session->user_id !== Auth::id()) {
             abort(403);
         }
@@ -227,7 +245,15 @@ class ChatController extends Controller
             $session->update(['title' => $title]);
         }
 
-        $response = $this->aiService->generateResponse($session);
+        try {
+            $response = $this->aiService->generateResponse($session);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('ChatController sendMessage error: '.$e->getMessage(), ['exception' => $e]);
+            $response = [
+                'error' => $e->getMessage(),
+                'content' => '⚠️ Error generating response: '.$e->getMessage(),
+            ];
+        }
 
         return response()->json([
             'success' => true,

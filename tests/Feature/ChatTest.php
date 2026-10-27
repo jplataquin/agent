@@ -4,8 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\ChatMessage;
 use App\Models\ChatSession;
+use App\Models\LlmProvider;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class ChatTest extends TestCase
@@ -217,5 +219,100 @@ class ChatTest extends TestCase
         $response->assertDontSee('MCP System Result');
         $response->assertDontSee('Remaining PTO balance: 14 days vacation, 5 sick days.');
         $response->assertDontSee('class="message-tool"', false);
+    }
+
+    public function test_user_can_continue_conversation_with_gemini_provider_after_tool_call()
+    {
+        // Set Gemini as the default active provider
+        LlmProvider::query()->update(['is_default' => false]);
+        $gemini = LlmProvider::create([
+            'name' => 'Active Gemini 1.5 Flash',
+            'provider_type' => 'gemini',
+            'api_key' => 'AIzaSyLiveTestGeminiKey',
+            'model' => 'gemini-1.5-flash',
+            'temperature' => 0.7,
+            'is_default' => true,
+            'is_active' => true,
+        ]);
+
+        $user = User::where('role', User::ROLE_REGULAR)->first();
+        $session = ChatSession::create([
+            'user_id' => $user->id,
+            'title' => 'Gemini Multi-turn',
+        ]);
+
+        // Prior turn with tool call
+        ChatMessage::create([
+            'chat_session_id' => $session->id,
+            'role' => ChatMessage::ROLE_USER,
+            'content' => 'Look up company directory for Alice',
+        ]);
+        ChatMessage::create([
+            'chat_session_id' => $session->id,
+            'role' => ChatMessage::ROLE_ASSISTANT,
+            'content' => null,
+            'tool_calls' => [
+                ['id' => 'call_gemini_1', 'name' => 'internal_company_directory', 'arguments' => ['query' => 'Alice']],
+            ],
+        ]);
+        ChatMessage::create([
+            'chat_session_id' => $session->id,
+            'role' => ChatMessage::ROLE_TOOL,
+            'content' => json_encode(['employee' => 'Alice Smith', 'dept' => 'Design']),
+            'tool_call_id' => 'call_gemini_1',
+        ]);
+        ChatMessage::create([
+            'chat_session_id' => $session->id,
+            'role' => ChatMessage::ROLE_ASSISTANT,
+            'content' => 'Alice Smith is in the Design department.',
+        ]);
+
+        $recordedPayload = null;
+        Http::fake([
+            'https://generativelanguage.googleapis.com/*' => function ($request) use (&$recordedPayload) {
+                $recordedPayload = $request->data();
+
+                return Http::response([
+                    'candidates' => [
+                        [
+                            'content' => [
+                                'parts' => [
+                                    ['text' => 'Alice works on the UX team.'],
+                                ],
+                                'role' => 'model',
+                            ],
+                        ],
+                    ],
+                    'usageMetadata' => ['promptTokenCount' => 85, 'candidatesTokenCount' => 20],
+                ], 200);
+            },
+        ]);
+
+        // Follow-up message replying to the LLM's response
+        $response = $this->actingAs($user)->postJson("/chat/{$session->id}/message", [
+            'message' => 'What sub-team is she on?',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('success', true);
+        $response->assertJsonPath('ai_response.content', 'Alice works on the UX team.');
+
+        $this->assertNotNull($recordedPayload);
+        $contents = $recordedPayload['contents'];
+
+        // Verify turns alternate correctly: user -> model (functionCall) -> user (functionResponse) -> model (text) -> user (follow-up)
+        $this->assertCount(5, $contents);
+        $this->assertEquals('user', $contents[0]['role']);
+        $this->assertEquals('model', $contents[1]['role']);
+        $this->assertEquals('user', $contents[2]['role']);
+        $this->assertEquals('model', $contents[3]['role']);
+        $this->assertEquals('user', $contents[4]['role']);
+
+        // Verify no bogus 'skip_thought_signature_validator' was injected into the functionCall
+        $this->assertArrayNotHasKey('thought_signature', $contents[1]['parts'][0]);
+
+        // Verify functionResponse name matches the tool name and response is an object
+        $this->assertEquals('internal_company_directory', $contents[2]['parts'][0]['functionResponse']['name']);
+        $this->assertIsObject($contents[2]['parts'][0]['functionResponse']['response']);
     }
 }
