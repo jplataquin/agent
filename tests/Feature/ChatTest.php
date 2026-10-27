@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\ChatMessage;
 use App\Models\ChatSession;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -118,5 +119,62 @@ class ChatTest extends TestCase
         $this->assertNotFalse($micPos);
         $this->assertNotFalse($sendPos);
         $this->assertLessThan($sendPos, $micPos, 'Mic button must appear before send button.');
+    }
+
+    public function test_mcp_tool_results_are_hidden_from_user_in_chat_view_only_llm_reply_visible()
+    {
+        $user = User::where('role', User::ROLE_REGULAR)->first();
+        $session = ChatSession::create([
+            'user_id' => $user->id,
+            'title' => 'PTO Inquiry',
+        ]);
+
+        // 1. User prompt
+        ChatMessage::create([
+            'chat_session_id' => $session->id,
+            'role' => ChatMessage::ROLE_USER,
+            'content' => 'What is my remaining PTO balance?',
+        ]);
+
+        // 2. Intermediate assistant message with tool calls (empty content)
+        ChatMessage::create([
+            'chat_session_id' => $session->id,
+            'role' => ChatMessage::ROLE_ASSISTANT,
+            'content' => null,
+            'tool_calls' => [
+                [
+                    'id' => 'call_123',
+                    'name' => 'get_employee_leave_balance',
+                    'arguments' => ['employee_id' => 'EMP-101'],
+                ],
+            ],
+        ]);
+
+        // 3. Raw MCP tool result
+        ChatMessage::create([
+            'chat_session_id' => $session->id,
+            'role' => ChatMessage::ROLE_TOOL,
+            'content' => 'Remaining PTO balance: 14 days vacation, 5 sick days.',
+            'tool_call_id' => 'call_123',
+        ]);
+
+        // 4. Final LLM synthesized reply
+        ChatMessage::create([
+            'chat_session_id' => $session->id,
+            'role' => ChatMessage::ROLE_ASSISTANT,
+            'content' => 'You currently have 14 days of remaining vacation time and 5 sick days available.',
+        ]);
+
+        $response = $this->actingAs($user)->get("/chat/{$session->id}");
+        $response->assertStatus(200);
+
+        // User message and synthesized LLM reply MUST be visible
+        $response->assertSee('What is my remaining PTO balance?');
+        $response->assertSee('You currently have 14 days of remaining vacation time and 5 sick days available.');
+
+        // Raw MCP tool result and MCP system headers MUST NOT be visible
+        $response->assertDontSee('MCP System Result');
+        $response->assertDontSee('Remaining PTO balance: 14 days vacation, 5 sick days.');
+        $response->assertDontSee('class="message-tool"', false);
     }
 }

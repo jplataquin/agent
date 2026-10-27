@@ -162,10 +162,6 @@ class AiAgentService
                         $funcName = $toolCall['name'] ?? '';
                         $args = $toolCall['arguments'] ?? [];
 
-                        if ($onChunk) {
-                            $onChunk("\n*[Querying MCP Tool: {$funcName}...]*\n\n");
-                        }
-
                         $toolExecution = $this->mcpService->executeTool($funcName, $args);
 
                         // Save tool response message
