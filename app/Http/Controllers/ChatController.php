@@ -205,6 +205,8 @@ class ChatController extends Controller
      */
     public function sendMessage(Request $request, ChatSession $session)
     {
+        @set_time_limit(120);
+
         if ($session->user_id !== Auth::id()) {
             abort(403);
         }

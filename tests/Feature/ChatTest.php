@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\ChatMessage;
 use App\Models\ChatSession;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -78,6 +79,101 @@ class ChatTest extends TestCase
         $this->assertDatabaseHas('token_metrics', [
             'user_id' => $user->id,
             'chat_session_id' => $session->id,
+        ]);
+    }
+
+    public function test_chat_view_does_not_render_raw_mcp_tool_json_messages()
+    {
+        $user = User::where('role', User::ROLE_REGULAR)->first();
+        $session = ChatSession::create([
+            'user_id' => $user->id,
+            'title' => 'Project Query',
+        ]);
+
+        ChatMessage::create([
+            'chat_session_id' => $session->id,
+            'role' => 'user',
+            'content' => 'Please query our internal projects.',
+        ]);
+
+        ChatMessage::create([
+            'chat_session_id' => $session->id,
+            'role' => 'assistant',
+            'content' => null,
+            'tool_calls' => [
+                ['id' => 'call_1', 'name' => 'list_projects', 'arguments' => []],
+            ],
+        ]);
+
+        ChatMessage::create([
+            'chat_session_id' => $session->id,
+            'role' => 'tool',
+            'content' => json_encode(['projects' => [['name' => 'Secret Internal Project', 'status' => 'ACTIVE']]]),
+            'tool_call_id' => 'call_1',
+        ]);
+
+        ChatMessage::create([
+            'chat_session_id' => $session->id,
+            'role' => 'assistant',
+            'content' => 'Here are the active internal projects found.',
+        ]);
+
+        $response = $this->actingAs($user)->get("/chat/{$session->id}");
+        $response->assertStatus(200);
+
+        // Raw tool JSON block must NOT be rendered in user chat
+        $response->assertDontSee('MCP System Result:');
+        $response->assertDontSee('Secret Internal Project');
+
+        // Human-readable assistant reply must be visible
+        $response->assertSee('Here are the active internal projects found.');
+    }
+
+    public function test_user_can_continue_conversation_after_tool_and_llm_reply()
+    {
+        $user = User::where('role', User::ROLE_REGULAR)->first();
+        $session = ChatSession::create([
+            'user_id' => $user->id,
+            'title' => 'Multi-turn Discussion',
+        ]);
+
+        // Prior turn 1 with tool call
+        ChatMessage::create([
+            'chat_session_id' => $session->id,
+            'role' => 'user',
+            'content' => 'First message',
+        ]);
+        ChatMessage::create([
+            'chat_session_id' => $session->id,
+            'role' => 'assistant',
+            'content' => null,
+            'tool_calls' => [
+                ['id' => 'call_99', 'name' => 'get_balance', 'arguments' => []],
+            ],
+        ]);
+        ChatMessage::create([
+            'chat_session_id' => $session->id,
+            'role' => 'tool',
+            'content' => '{"balance": 500}',
+            'tool_call_id' => 'call_99',
+        ]);
+        ChatMessage::create([
+            'chat_session_id' => $session->id,
+            'role' => 'assistant',
+            'content' => 'Your balance is 500 credits.',
+        ]);
+
+        // Follow-up message continuing the conversation
+        $response = $this->actingAs($user)->postJson("/chat/{$session->id}/message", [
+            'message' => 'Can you break that down?',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('success', true);
+        $this->assertDatabaseHas('chat_messages', [
+            'chat_session_id' => $session->id,
+            'role' => 'user',
+            'content' => 'Can you break that down?',
         ]);
     }
 

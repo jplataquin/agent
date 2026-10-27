@@ -906,38 +906,32 @@
                             </div>
 
                         @elseif($message->role === 'assistant')
-                            <div class="message-row assistant-row" id="msg-row-{{ $message->id }}">
-                                <div class="message-bubble message-assistant markdown-body" id="assistant-content-{{ $message->id }}" data-raw-content="{{ e($message->content) }}">
-                                    {!! $message->content !!}
+                            @if(! empty(trim($message->content ?? '')))
+                                <div class="message-row assistant-row" id="msg-row-{{ $message->id }}">
+                                    <div class="message-bubble message-assistant markdown-body" id="assistant-content-{{ $message->id }}" data-raw-content="{{ e($message->content) }}">
+                                        {!! $message->content !!}
+                                    </div>
+                                    <!-- Assistant Message Actions -->
+                                    <div class="message-actions px-2">
+                                        <button class="action-btn" onclick="copyMessageText('assistant-content-{{ $message->id }}')" title="Copy message">
+                                            <i class="bi bi-clipboard"></i> <span>Copy</span>
+                                        </button>
+                                        <!-- Text-to-Speech Button -->
+                                        <button class="action-btn tts-btn" onclick="toggleSpeakMessage('assistant-content-{{ $message->id }}', this)" title="Listen to response">
+                                            <i class="bi bi-volume-up"></i> <span>Listen</span>
+                                        </button>
+                                        <button class="action-btn {{ $message->feedback === 'like' ? 'active-like' : '' }}" onclick="submitFeedback({{ $message->id }}, 'like', this)" title="Good response">
+                                            <i class="bi bi-hand-thumbs-up"></i>
+                                        </button>
+                                        <button class="action-btn {{ $message->feedback === 'dislike' ? 'active-dislike' : '' }}" onclick="submitFeedback({{ $message->id }}, 'dislike', this)" title="Bad response">
+                                            <i class="bi bi-hand-thumbs-down"></i>
+                                        </button>
+                                        <button class="action-btn" onclick="regenerateResponse()" title="Regenerate response">
+                                            <i class="bi bi-arrow-clockwise"></i> <span>Regenerate</span>
+                                        </button>
+                                    </div>
                                 </div>
-                                <!-- Assistant Message Actions -->
-                                <div class="message-actions px-2">
-                                    <button class="action-btn" onclick="copyMessageText('assistant-content-{{ $message->id }}')" title="Copy message">
-                                        <i class="bi bi-clipboard"></i> <span>Copy</span>
-                                    </button>
-                                    <!-- Text-to-Speech Button -->
-                                    <button class="action-btn tts-btn" onclick="toggleSpeakMessage('assistant-content-{{ $message->id }}', this)" title="Listen to response">
-                                        <i class="bi bi-volume-up"></i> <span>Listen</span>
-                                    </button>
-                                    <button class="action-btn {{ $message->feedback === 'like' ? 'active-like' : '' }}" onclick="submitFeedback({{ $message->id }}, 'like', this)" title="Good response">
-                                        <i class="bi bi-hand-thumbs-up"></i>
-                                    </button>
-                                    <button class="action-btn {{ $message->feedback === 'dislike' ? 'active-dislike' : '' }}" onclick="submitFeedback({{ $message->id }}, 'dislike', this)" title="Bad response">
-                                        <i class="bi bi-hand-thumbs-down"></i>
-                                    </button>
-                                    <button class="action-btn" onclick="regenerateResponse()" title="Regenerate response">
-                                        <i class="bi bi-arrow-clockwise"></i> <span>Regenerate</span>
-                                    </button>
-                                </div>
-                            </div>
-
-                        @elseif($message->role === 'tool')
-                            <div class="message-row assistant-row">
-                                <div class="message-tool">
-                                    <div class="fw-bold mb-1"><i class="bi bi-gear-wide-connected me-1"></i> MCP System Result:</div>
-                                    <pre class="mb-0 text-wrap">{{ $message->content }}</pre>
-                                </div>
-                            </div>
+                            @endif
                         @endif
                     @empty
                         <div class="text-center text-muted my-auto py-5" id="emptyState">
@@ -959,7 +953,7 @@
             <!-- Chat Input Area -->
             @if($activeSession)
                 <div class="chat-input-area" id="chatInputArea">
-                    <form id="chatForm" class="d-flex gap-2 align-items-end">
+                    <form id="chatForm" method="POST" action="javascript:void(0);" onsubmit="event.preventDefault(); return false;" class="d-flex gap-2 align-items-end">
                         @csrf
 
                         <textarea 
@@ -1630,7 +1624,12 @@
         input.addEventListener('keydown', function (e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                form.dispatchEvent(new Event('submit'));
+                e.stopPropagation();
+                if (typeof form.requestSubmit === 'function') {
+                    form.requestSubmit();
+                } else {
+                    form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                }
             }
         });
 
@@ -1698,6 +1697,7 @@
 
         form.addEventListener('submit', function (e) {
             e.preventDefault();
+            e.stopPropagation();
             const text = input.value.trim();
             if (!text) return;
 
