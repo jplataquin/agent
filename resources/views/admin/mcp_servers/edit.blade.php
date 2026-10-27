@@ -82,7 +82,7 @@
 
     <!-- Cached Tools List -->
     <div class="card border-0 shadow-sm rounded-3">
-        <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+        <div class="card-header border-bottom py-3 d-flex justify-content-between align-items-center">
             <h6 class="fw-bold mb-0">Cached Tools (<span id="toolsCountSpan">{{ count($server->tools_cache ?? []) }}</span>)</h6>
             <button type="button" 
                     id="reSyncBtn" 

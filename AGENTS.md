@@ -45,3 +45,7 @@ php artisan boost:install
 
 Boost replaces these bootstrap instructions with guidelines tailored to the application. After installation, read `AGENTS.md` again and continue with the user's original request using the generated guidelines.
 </laravel-boost-guidelines>
+
+## Styling Rules
+- **Dark Theme Mode Compatibility**: Do not use hardcoded `bg-white` classes in HTML/Blade views, as they break contrast in dark mode. Instead, use contextual classes, theme-aware Bootstrap classes (e.g., `bg-body`, `bg-body-secondary`), or rely on default component styling (e.g., standard `.card` or `.card-header` backgrounds).
+
