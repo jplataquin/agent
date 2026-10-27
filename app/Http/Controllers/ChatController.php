@@ -71,13 +71,20 @@ class ChatController extends Controller
     /**
      * Delete a chat session.
      */
-    public function destroy(ChatSession $session)
+    public function destroy(Request $request, ChatSession $session)
     {
         if ($session->user_id !== Auth::id()) {
             abort(403);
         }
 
         $session->delete();
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Conversation deleted.',
+            ]);
+        }
 
         return redirect()->route('chat.index')->with('success', 'Conversation deleted.');
     }

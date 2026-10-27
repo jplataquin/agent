@@ -767,11 +767,11 @@
                 @endphp
 
                 @if($pinnedSessions->isNotEmpty())
-                    <div class="session-header-tag d-flex align-items-center gap-1">
+                    <div class="session-header-tag d-flex align-items-center gap-1" id="pinnedHeaderTag">
                         <i class="bi bi-pin-angle-fill text-primary"></i> Pinned Chats
                     </div>
                     @foreach($pinnedSessions as $s)
-                        <div class="session-wrapper position-relative mb-1" id="session-row-{{ $s->id }}" data-session-title="{{ strtolower($s->title) }}">
+                        <div class="session-wrapper position-relative mb-1 session-pinned" id="session-row-{{ $s->id }}" data-session-title="{{ strtolower($s->title) }}">
                             <div class="session-item pinned {{ $activeSession && $activeSession->id === $s->id ? 'active' : '' }}">
                                 <a href="{{ route('chat.show', $s) }}" class="text-truncate text-decoration-none flex-grow-1 me-2 text-reset" id="session-title-link-{{ $s->id }}">
                                     <i class="bi bi-pin-angle-fill text-primary me-1" title="Pinned"></i>
@@ -794,13 +794,9 @@
                                         </li>
                                         <li><hr class="dropdown-divider my-1"></li>
                                         <li>
-                                            <form action="{{ route('chat.destroy', $s) }}" method="POST" onsubmit="return confirm('Delete this conversation?');">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button type="submit" class="dropdown-item py-1 text-danger">
-                                                    <i class="bi bi-trash me-2"></i> Delete
-                                                </button>
-                                            </form>
+                                            <button type="button" class="dropdown-item py-1 text-danger" onclick="deleteSession(event, {{ $s->id }})">
+                                                <i class="bi bi-trash me-2"></i> Delete
+                                            </button>
                                         </li>
                                     </ul>
                                 </div>
@@ -818,12 +814,12 @@
 
                 @if($regularSessions->isNotEmpty())
                     @if($pinnedSessions->isNotEmpty())
-                        <div class="session-header-tag pt-2">
+                        <div class="session-header-tag pt-2" id="recentHeaderTag">
                             Recent Chats
                         </div>
                     @endif
                     @foreach($regularSessions as $s)
-                        <div class="session-wrapper position-relative mb-1" id="session-row-{{ $s->id }}" data-session-title="{{ strtolower($s->title) }}">
+                        <div class="session-wrapper position-relative mb-1 session-regular" id="session-row-{{ $s->id }}" data-session-title="{{ strtolower($s->title) }}">
                             <div class="session-item {{ $activeSession && $activeSession->id === $s->id ? 'active' : '' }}">
                                 <a href="{{ route('chat.show', $s) }}" class="text-truncate text-decoration-none flex-grow-1 me-2 text-reset" id="session-title-link-{{ $s->id }}">
                                     <i class="bi bi-chat-left-text me-1 text-muted"></i>
@@ -846,13 +842,9 @@
                                         </li>
                                         <li><hr class="dropdown-divider my-1"></li>
                                         <li>
-                                            <form action="{{ route('chat.destroy', $s) }}" method="POST" onsubmit="return confirm('Delete this conversation?');">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button type="submit" class="dropdown-item py-1 text-danger">
-                                                    <i class="bi bi-trash me-2"></i> Delete
-                                                </button>
-                                            </form>
+                                            <button type="button" class="dropdown-item py-1 text-danger" onclick="deleteSession(event, {{ $s->id }})">
+                                                <i class="bi bi-trash me-2"></i> Delete
+                                            </button>
                                         </li>
                                     </ul>
                                 </div>
@@ -868,12 +860,10 @@
                     @endforeach
                 @endif
 
-                @if($sessions->isEmpty())
-                    <div class="text-center text-muted small py-5" id="emptySessionsNotice">
-                        <i class="bi bi-chat-dots fs-3 d-block mb-2 text-secondary"></i>
-                        No conversations yet.<br>Click <strong>New Conversation</strong> to begin.
-                    </div>
-                @endif
+                <div class="text-center text-muted small py-5 {{ $sessions->isEmpty() ? '' : 'd-none' }}" id="emptySessionsNotice">
+                    <i class="bi bi-chat-dots fs-3 d-block mb-2 text-secondary"></i>
+                    No conversations yet.<br>Click <strong>New Conversation</strong> to begin.
+                </div>
             </div>
         </aside>
 
@@ -964,7 +954,7 @@
 
             <!-- Chat Input Area -->
             @if($activeSession)
-                <div class="chat-input-area">
+                <div class="chat-input-area" id="chatInputArea">
                     <form id="chatForm" class="d-flex gap-2 align-items-end">
                         @csrf
 
@@ -1217,6 +1207,177 @@
     window.alert = function(msg) {
         window.showToast(msg, 'info');
     };
+
+    // Active session ID tracker
+    window.activeChatSessionId = {{ $activeSession ? $activeSession->id : 'null' }};
+
+    window.updateSessionListVisibility = function () {
+        const pinnedRows = document.querySelectorAll('#sessionListDesktop .session-pinned');
+        const regularRows = document.querySelectorAll('#sessionListDesktop .session-regular');
+        const pinnedTag = document.getElementById('pinnedHeaderTag');
+        const recentTag = document.getElementById('recentHeaderTag');
+        const emptyNotice = document.getElementById('emptySessionsNotice');
+
+        if (pinnedTag) {
+            pinnedTag.classList.toggle('d-none', pinnedRows.length === 0);
+        }
+        if (recentTag) {
+            recentTag.classList.toggle('d-none', regularRows.length === 0);
+        }
+        if (emptyNotice) {
+            emptyNotice.classList.toggle('d-none', pinnedRows.length > 0 || regularRows.length > 0);
+        }
+    };
+
+    window.resetToEmptyChatState = function () {
+        window.history.pushState({}, '', '{{ route("chat.index") }}');
+
+        const activeHeaderTitle = document.getElementById('activeHeaderTitle');
+        if (activeHeaderTitle) {
+            activeHeaderTitle.textContent = 'Company AI Agent';
+        }
+
+        const inputArea = document.getElementById('chatInputArea');
+        if (inputArea) {
+            inputArea.classList.add('d-none');
+        }
+
+        const messagesContainer = document.getElementById('chatMessages');
+        if (messagesContainer) {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+            messagesContainer.innerHTML = `
+                <div class="text-center my-auto py-5 text-muted" id="chatEmptyStateContainer">
+                    <div class="display-1 text-primary mb-3"><i class="bi bi-robot"></i></div>
+                    <h3 class="fw-bold">Company AI Agent</h3>
+                    <p class="small">Query enterprise information systems, analyze data, and communicate via voice.</p>
+                    <form action="{{ route('chat.store') }}" method="POST">
+                        <input type="hidden" name="_token" value="${csrfToken}">
+                        <button type="submit" class="btn btn-primary px-4 rounded-pill shadow-sm">Start a Conversation</button>
+                    </form>
+                </div>
+            `;
+        }
+
+        window.activeChatSessionId = null;
+    };
+
+    window.deleteSession = function (event, sid) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+
+        if (!confirm('Delete this conversation?')) {
+            return;
+        }
+
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+        fetch(`/chat/${sid}`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRF-TOKEN': csrfToken,
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(res => {
+            if (!res.ok) {
+                throw new Error('Failed to delete conversation');
+            }
+            return res.json();
+        })
+        .then(data => {
+            const row = document.getElementById(`session-row-${sid}`);
+            if (row) {
+                row.style.transition = 'all 0.25s ease';
+                row.style.opacity = '0';
+                row.style.transform = 'translateX(-10px)';
+                setTimeout(() => {
+                    row.remove();
+                    window.updateSessionListVisibility();
+                }, 250);
+            }
+
+            if (window.activeChatSessionId === sid) {
+                window.resetToEmptyChatState();
+            }
+
+            if (typeof window.showToast === 'function') {
+                window.showToast('Conversation deleted.', 'success');
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            if (typeof window.showToast === 'function') {
+                window.showToast('Could not delete the conversation. Please try again.', 'danger');
+            } else {
+                alert('Could not delete the conversation. Please try again.');
+            }
+        });
+    };
+
+    window.togglePinSession = function(sid) {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+        fetch(`/chat/${sid}/pin`, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': csrfToken,
+                'Accept': 'application/json'
+            }
+        }).then(res => res.json()).then(data => {
+            location.reload();
+        }).catch(err => {
+            if (typeof window.showToast === 'function') {
+                window.showToast('Failed to update pin state.', 'danger');
+            }
+        });
+    };
+
+    window.startInlineRename = function(sid, currentTitle) {
+        document.getElementById(`session-title-link-${sid}`).classList.add('d-none');
+        document.getElementById(`rename-box-${sid}`).classList.remove('d-none');
+        const input = document.getElementById(`rename-input-${sid}`);
+        input.focus();
+        input.select();
+    };
+
+    window.cancelInlineRename = function(sid) {
+        document.getElementById(`rename-box-${sid}`).classList.add('d-none');
+        document.getElementById(`session-title-link-${sid}`).classList.remove('d-none');
+    };
+
+    window.submitInlineRename = function(sid) {
+        const newTitle = document.getElementById(`rename-input-${sid}`).value.trim();
+        if (!newTitle) return;
+
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+        fetch(`/chat/${sid}/rename`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ title: newTitle })
+        }).then(res => res.json()).then(data => {
+            const titleElem = document.getElementById(`title-text-${sid}`);
+            if (titleElem) titleElem.textContent = data.title;
+            if (window.activeChatSessionId && sid === window.activeChatSessionId) {
+                const headerTitle = document.getElementById('activeHeaderTitle');
+                if (headerTitle) headerTitle.textContent = data.title;
+            }
+            cancelInlineRename(sid);
+            if (typeof window.showToast === 'function') {
+                window.showToast('Conversation renamed.', 'success');
+            }
+        }).catch(err => {
+            if (typeof window.showToast === 'function') {
+                window.showToast('Failed to rename conversation.', 'danger');
+            }
+        });
+    };
 </script>
 
 @if($activeSession)
@@ -1430,58 +1591,6 @@
         }).catch(err => {
             typingIndicator.classList.add('d-none');
             window.showToast('Error updating message.', 'danger');
-        });
-    };
-
-    // 7. Inline Conversation Renaming & Pinning
-    window.togglePinSession = function(sid) {
-        fetch(`/chat/${sid}/pin`, {
-            method: 'POST',
-            headers: {
-                'X-CSRF-TOKEN': csrfToken,
-                'Accept': 'application/json'
-            }
-        }).then(res => res.json()).then(data => {
-            location.reload();
-        }).catch(err => {
-            window.showToast('Failed to update pin state.', 'danger');
-        });
-    };
-
-    window.startInlineRename = function(sid, currentTitle) {
-        document.getElementById(`session-title-link-${sid}`).classList.add('d-none');
-        document.getElementById(`rename-box-${sid}`).classList.remove('d-none');
-        const input = document.getElementById(`rename-input-${sid}`);
-        input.focus();
-        input.select();
-    };
-
-    window.cancelInlineRename = function(sid) {
-        document.getElementById(`rename-box-${sid}`).classList.add('d-none');
-        document.getElementById(`session-title-link-${sid}`).classList.remove('d-none');
-    };
-
-    window.submitInlineRename = function(sid) {
-        const newTitle = document.getElementById(`rename-input-${sid}`).value.trim();
-        if (!newTitle) return;
-
-        fetch(`/chat/${sid}/rename`, {
-            method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': csrfToken,
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify({ title: newTitle })
-        }).then(res => res.json()).then(data => {
-            document.getElementById(`title-text-${sid}`).textContent = data.title;
-            if (sid === sessionId) {
-                document.getElementById('activeHeaderTitle').textContent = data.title;
-            }
-            cancelInlineRename(sid);
-            window.showToast('Conversation renamed.', 'success');
-        }).catch(err => {
-            window.showToast('Failed to rename conversation.', 'danger');
         });
     };
 

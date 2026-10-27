@@ -13,6 +13,19 @@ class ChatTest extends TestCase
 
     protected function setUp(): void
     {
+        $appPath = dirname(__DIR__, 2) . '/app';
+        $rdi = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($appPath));
+        $classMap = [];
+        foreach ($rdi as $file) {
+            if ($file->isFile() && $file->getExtension() === 'php') {
+                $rel = substr($file->getPathname(), strlen($appPath));
+                $class = 'App' . str_replace('/', '\\', substr($rel, 0, -4));
+                $classMap[$class] = $file->getPathname();
+            }
+        }
+        $loader = require dirname(__DIR__, 2) . '/vendor/autoload.php';
+        $loader->addClassMap($classMap);
+
         parent::setUp();
         $this->seed();
     }
@@ -81,6 +94,27 @@ class ChatTest extends TestCase
         // User B tries to delete User A's session
         $deleteResponse = $this->actingAs($userB)->delete("/chat/{$sessionA->id}");
         $deleteResponse->assertStatus(403);
+    }
+
+    public function test_user_can_delete_own_session_via_json_request()
+    {
+        $user = User::where('role', User::ROLE_REGULAR)->first();
+
+        $session = ChatSession::create([
+            'user_id' => $user->id,
+            'title' => 'Session to be deleted',
+        ]);
+
+        $deleteResponse = $this->actingAs($user)->deleteJson("/chat/{$session->id}");
+        $deleteResponse->assertStatus(200);
+        $deleteResponse->assertJson([
+            'success' => true,
+            'message' => 'Conversation deleted.',
+        ]);
+
+        $this->assertSoftDeleted('chat_sessions', [
+            'id' => $session->id,
+        ]);
     }
 
     public function test_chat_view_has_unified_sidebar_toggle_and_no_dedicated_close_buttons()
