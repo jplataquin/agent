@@ -24,8 +24,9 @@
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label fw-semibold">Short Description</label>
-                    <input type="text" name="description" class="form-control" placeholder="What domain or capability does this skill address?" value="{{ old('description') }}">
+                    <label class="form-label fw-semibold">Description</label>
+                    <textarea name="description" rows="3" class="form-control @error('description') is-invalid @enderror" placeholder="What domain or capability does this skill address?">{{ old('description') }}</textarea>
+                    @error('description') <div class="invalid-feedback">{{ $message }}</div> @enderror
                 </div>
 
                 <div class="mb-3">
