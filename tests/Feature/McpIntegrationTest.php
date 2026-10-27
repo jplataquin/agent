@@ -75,6 +75,7 @@ class McpIntegrationTest extends TestCase
 
                 if ($method === 'tools/list' && $callCount === 0) {
                     $callCount++;
+
                     // First tools/list fails because server expects initialize
                     return Http::response([
                         'jsonrpc' => '2.0',

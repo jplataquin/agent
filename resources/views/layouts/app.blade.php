@@ -79,6 +79,24 @@
                 padding-right: 12px;
             }
         }
+
+        @media (max-width: 767.98px) {
+            .navbar-collapse {
+                background: inherit;
+                padding: 12px 0 8px 0;
+                border-top: 1px solid rgba(0, 0, 0, 0.08);
+                margin-top: 8px;
+            }
+            [data-bs-theme="dark"] .navbar-collapse {
+                border-top-color: rgba(255, 255, 255, 0.12);
+            }
+            .navbar-collapse .nav-item {
+                padding: 3px 0;
+            }
+            [data-bs-theme="dark"] .navbar-toggler-icon {
+                filter: invert(1) grayscale(100%) brightness(200%);
+            }
+        }
     </style>
     @stack('styles')
 </head>
@@ -242,6 +260,40 @@
                     updateIcons(newTheme);
                 });
             });
+        });
+    </script>
+
+    <!-- Bootstrap 5.3 Bundle (Includes Popper & all Data-API plugins) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Fail-safe Mobile Navbar Burger Handler -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const toggler = document.querySelector('.navbar-toggler');
+            const targetId = toggler ? toggler.getAttribute('data-bs-target') : '#navbarSupportedContent';
+            const collapseEl = document.querySelector(targetId);
+
+            if (toggler && collapseEl) {
+                toggler.addEventListener('click', function(e) {
+                    if (window.bootstrap && window.bootstrap.Collapse) {
+                        try {
+                            const inst = window.bootstrap.Collapse.getOrCreateInstance(collapseEl, { toggle: false });
+                            inst.toggle();
+                            e.preventDefault();
+                        } catch (err) {
+                            collapseEl.classList.toggle('show');
+                            const isExpanded = collapseEl.classList.contains('show');
+                            toggler.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+                            toggler.classList.toggle('collapsed', !isExpanded);
+                        }
+                    } else {
+                        collapseEl.classList.toggle('show');
+                        const isExpanded = collapseEl.classList.contains('show');
+                        toggler.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+                        toggler.classList.toggle('collapsed', !isExpanded);
+                    }
+                });
+            }
         });
     </script>
 
