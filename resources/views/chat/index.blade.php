@@ -361,36 +361,42 @@
     }
 
     @media (max-width: 767.98px) {
-        /* Lock mobile page height and disable outer scrolling */
+        /* Lock mobile page height and explicitly override desktop min-height: 100vh */
         html, body {
-            height: 100dvh;
-            overflow: hidden;
-            margin: 0;
-            padding: 0;
+            height: 100dvh !important;
+            min-height: 100dvh !important;
+            overflow: hidden !important;
+            margin: 0 !important;
+            padding: 0 !important;
         }
         #app {
-            height: 100dvh;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
+            height: 100dvh !important;
+            min-height: 100dvh !important;
+            display: flex !important;
+            flex-direction: column !important;
+            overflow: hidden !important;
+        }
+        /* Ensure navbar doesn't shrink and remains pinned at the top */
+        .navbar {
+            flex-shrink: 0 !important;
         }
         main {
-            flex: 1 1 0%;
-            display: flex;
-            flex-direction: column;
-            min-height: 0;
-            padding-top: 0 !important;
-            padding-bottom: 0 !important;
-            overflow: hidden;
+            flex: 1 1 0% !important;
+            display: flex !important;
+            flex-direction: column !important;
+            min-height: 0 !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            overflow: hidden !important;
         }
         main > .container-fluid {
-            flex: 1 1 0%;
-            display: flex;
-            flex-direction: column;
-            min-height: 0;
-            padding-left: 0 !important;
-            padding-right: 0 !important;
-            overflow: hidden;
+            flex: 1 1 0% !important;
+            display: flex !important;
+            flex-direction: column !important;
+            min-height: 0 !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            overflow: hidden !important;
         }
         .chat-container {
             flex: 1 1 0%;
