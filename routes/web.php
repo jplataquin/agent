@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\TokenMetricController;
 use App\Http\Controllers\Admin\UserChatController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\ChatController;
+use App\Http\Controllers\GeminiDiagnosticController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -18,6 +19,13 @@ Route::get('/', function () {
     }
 
     return view('welcome');
+});
+
+// Public Gemini 3 Diagnostics & Thought Signature Inspector
+Route::prefix('diagnostics/gemini')->name('diagnostics.gemini')->group(function () {
+    Route::get('/', [GeminiDiagnosticController::class, 'index']);
+    Route::post('/run', [GeminiDiagnosticController::class, 'run'])->name('.run');
+    Route::get('/status', [GeminiDiagnosticController::class, 'status'])->name('.status');
 });
 
 Auth::routes();
