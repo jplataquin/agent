@@ -33,6 +33,9 @@
         }
     },
     "scripts": {
+        "agents:clean": "git worktree list --porcelain | grep '^worktree ' | tail -n +2 | cut -d' ' -f2- | xargs -r -I {} git worktree remove --force \"{}\" && git worktree prune && git branch --list 'worktree-*' | xargs -r git branch -D && rm -rf .agent-states/*",
+        "clean:agent": "@agents:clean",
+        "clean:agents": "@agents:clean",
         "setup": [
             "composer install",
             "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",

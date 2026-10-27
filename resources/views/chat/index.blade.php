@@ -39,11 +39,13 @@
         display: flex !important;
         flex-direction: column !important;
         padding: 14px;
-        transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.25s cubic-bezier(0.4, 0, 0.2, 1), max-width 0.25s cubic-bezier(0.4, 0, 0.2, 1), padding 0.25s ease, opacity 0.2s ease;
         overflow: hidden;
         flex-shrink: 0;
         position: relative;
         z-index: 2;
+    }
+    .chat-sidebar.transition-ready {
+        transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.25s cubic-bezier(0.4, 0, 0.2, 1), max-width 0.25s cubic-bezier(0.4, 0, 0.2, 1), padding 0.25s ease, opacity 0.2s ease;
     }
     .chat-sidebar.collapsed {
         width: 0 !important;
@@ -409,11 +411,13 @@
             max-width: 85%;
             z-index: 1040;
             box-shadow: 4px 0 24px rgba(0, 0, 0, 0.18);
-            transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
             transform: translateX(-100%);
             opacity: 0;
             pointer-events: none;
             border-right: 1px solid #e2e8f0;
+        }
+        .chat-sidebar.transition-ready {
+            transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
         }
         .chat-sidebar.mobile-open {
             transform: translateX(0) !important;
@@ -666,8 +670,8 @@
         <div class="chat-header d-flex align-items-center justify-content-between p-2 p-md-3">
             <div class="d-flex align-items-center gap-2">
                 <!-- Single Unified Sidebar Toggle Button -->
-                <button class="btn btn-outline-secondary btn-sm rounded-pill d-inline-flex align-items-center gap-1" id="toggleSidebarBtn" type="button" title="Toggle Conversations Sidebar" aria-label="Toggle Conversations Sidebar">
-                    <i class="bi bi-layout-sidebar-inset" id="toggleSidebarIcon"></i>
+                <button class="btn btn-outline-secondary btn-sm rounded-pill d-inline-flex align-items-center gap-1" id="toggleSidebarBtn" type="button" title="Show Sidebar" aria-label="Show Sidebar" aria-expanded="false">
+                    <i class="bi bi-layout-sidebar" id="toggleSidebarIcon"></i>
                     <span class="small d-none d-lg-inline" id="toggleSidebarText">Sidebar</span>
                 </button>
 
@@ -720,7 +724,7 @@
             <div class="chat-sidebar-backdrop" id="chatSidebarBackdrop"></div>
 
             <!-- Unified Conversations Sidebar -->
-            <aside class="chat-sidebar" id="chatSidebar" aria-label="Conversations Sidebar">
+            <aside class="chat-sidebar collapsed" id="chatSidebar" aria-label="Conversations Sidebar">
                 <!-- Sidebar Header (Dedicated close button removed) -->
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <div class="d-flex align-items-center gap-2">
@@ -1050,14 +1054,22 @@
             });
         }
 
-        // Initialize state on page load
+        // Initialize state on page load (Default to CLOSED)
         if (chatSidebar) {
             if (isMobile()) {
                 setSidebarState(false);
             } else {
-                const isSavedCollapsed = localStorage.getItem('chat_sidebar_collapsed') === '1';
-                setSidebarState(!isSavedCollapsed);
+                // Closed by default; only open if user explicitly chose to keep it open ('0')
+                const isSavedOpen = localStorage.getItem('chat_sidebar_collapsed') === '0';
+                setSidebarState(isSavedOpen);
             }
+
+            // Enable transition animations after initial layout is applied so toggling animates smoothly without refresh flicker
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    chatSidebar.classList.add('transition-ready');
+                });
+            });
         }
 
         // Handle responsive resize dynamically
@@ -1070,8 +1082,8 @@
             } else {
                 if (chatSidebarBackdrop) chatSidebarBackdrop.classList.remove('show');
                 chatSidebar.classList.remove('mobile-open');
-                const isSavedCollapsed = localStorage.getItem('chat_sidebar_collapsed') === '1';
-                setSidebarState(!isSavedCollapsed);
+                const isSavedOpen = localStorage.getItem('chat_sidebar_collapsed') === '0';
+                setSidebarState(isSavedOpen);
             }
         });
 
