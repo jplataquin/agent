@@ -28,6 +28,10 @@ class ChatTest extends TestCase
 
         parent::setUp();
         $this->seed();
+
+        config(['view.paths' => [dirname(__DIR__, 2) . '/resources/views']]);
+        app()->forgetInstance('view.finder');
+        \Illuminate\Support\Facades\View::clearResolvedInstances();
     }
 
     public function test_user_can_access_chat_and_create_session()
@@ -132,6 +136,9 @@ class ChatTest extends TestCase
         // Dedicated close buttons and redundant offcanvas drawer are removed
         $response->assertDontSee('id="collapseSidebarBtn"', false);
         $response->assertDontSee('id="mobileSessionDrawer"', false);
+
+        // Sidebar is collapsed by default in HTML to prevent animation flashes on page refresh
+        $response->assertSee('class="chat-sidebar collapsed"', false);
     }
 
     public function test_chat_view_places_mic_button_before_submit_button()
