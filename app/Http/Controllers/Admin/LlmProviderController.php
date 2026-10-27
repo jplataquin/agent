@@ -261,9 +261,15 @@ class LlmProviderController extends Controller
         }
     }
 
-    public function logs(LlmProvider $llmProvider)
+    public function logs(Request $request, LlmProvider $llmProvider)
     {
-        $logs = $llmProvider->logs()->paginate(30);
+        $query = $llmProvider->logs();
+
+        if ($request->filled('chat_session_id')) {
+            $query->where('chat_session_id', $request->input('chat_session_id'));
+        }
+
+        $logs = $query->paginate(30)->withQueryString();
 
         return view('admin.llm_providers.logs', compact('llmProvider', 'logs'));
     }

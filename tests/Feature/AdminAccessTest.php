@@ -12,8 +12,25 @@ class AdminAccessTest extends TestCase
 
     protected function setUp(): void
     {
+        $appPath = dirname(__DIR__, 2) . '/app';
+        $rdi = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($appPath));
+        $classMap = [];
+        foreach ($rdi as $file) {
+            if ($file->isFile() && $file->getExtension() === 'php') {
+                $rel = substr($file->getPathname(), strlen($appPath));
+                $class = 'App' . str_replace('/', '\\', substr($rel, 0, -4));
+                $classMap[$class] = $file->getPathname();
+            }
+        }
+        $loader = require dirname(__DIR__, 2) . '/vendor/autoload.php';
+        $loader->addClassMap($classMap);
+
         parent::setUp();
         $this->seed();
+
+        config(['view.paths' => [dirname(__DIR__, 2) . '/resources/views']]);
+        app()->forgetInstance('view.finder');
+        \Illuminate\Support\Facades\View::clearResolvedInstances();
     }
 
     public function test_guest_is_redirected_to_login_when_accessing_admin()
@@ -112,5 +129,62 @@ class AdminAccessTest extends TestCase
         $response->assertStatus(200);
         $response->assertDontSee(route('admin.dashboard'));
         $response->assertDontSee('Admin Console');
+    }
+
+    public function test_admin_can_filter_llm_logs_by_chat_session_id()
+    {
+        $admin = User::where('role', User::ROLE_ADMIN)->first();
+        $provider = \App\Models\LlmProvider::first();
+
+        $session1 = \App\Models\ChatSession::create([
+            'user_id' => $admin->id,
+            'title' => 'First Session',
+        ]);
+
+        $session2 = \App\Models\ChatSession::create([
+            'user_id' => $admin->id,
+            'title' => 'Second Session',
+        ]);
+
+        $log1 = \App\Models\LlmLog::create([
+            'llm_provider_id' => $provider->id,
+            'chat_session_id' => $session1->id,
+            'user_id' => $admin->id,
+            'action' => 'chat_completion',
+            'endpoint' => 'https://api.openai.com/v1/chat/completions',
+            'request_payload' => ['messages' => [['role' => 'user', 'content' => 'Question 1']]],
+            'response_body' => json_encode(['reply' => 'Answer 1']),
+            'status_code' => 200,
+            'is_success' => true,
+        ]);
+
+        $log2 = \App\Models\LlmLog::create([
+            'llm_provider_id' => $provider->id,
+            'chat_session_id' => $session2->id,
+            'user_id' => $admin->id,
+            'action' => 'chat_completion',
+            'endpoint' => 'https://api.openai.com/v1/chat/completions',
+            'request_payload' => ['messages' => [['role' => 'user', 'content' => 'Question 2']]],
+            'response_body' => json_encode(['reply' => 'Answer 2']),
+            'status_code' => 200,
+            'is_success' => true,
+        ]);
+
+        // Unfiltered logs request shows both logs
+        $response = $this->actingAs($admin)->get(route('admin.llm-providers.logs', $provider));
+        $response->assertStatus(200);
+        $response->assertSee('HTTP Inspection #' . $log1->id);
+        $response->assertSee('HTTP Inspection #' . $log2->id);
+        $response->assertSee('json-tree-container');
+
+        // Filtered logs request for session 1 only shows log1
+        $filteredResponse = $this->actingAs($admin)->get(route('admin.llm-providers.logs', [
+            'llm_provider' => $provider,
+            'chat_session_id' => $session1->id,
+        ]));
+        $filteredResponse->assertStatus(200);
+        $filteredResponse->assertSee('HTTP Inspection #' . $log1->id);
+        $filteredResponse->assertDontSee('HTTP Inspection #' . $log2->id);
+        $filteredResponse->assertSee('Filtering by Session #' . $session1->id);
     }
 }
