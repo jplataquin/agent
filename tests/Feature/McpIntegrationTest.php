@@ -257,4 +257,86 @@ class McpIntegrationTest extends TestCase
         $this->assertTrue($execution['success']);
         $this->assertEquals('Remaining PTO: 14 days', $execution['output']);
     }
+
+    public function test_external_server_with_api_mcp_path_is_not_hijacked_as_builtin()
+    {
+        $server = McpServer::create([
+            'name' => 'Remote CRM MCP',
+            'endpoint_url' => 'https://crm.external-system.com/api/mcp',
+            'auth_type' => 'bearer',
+            'auth_token' => 'remote-token-999',
+            'is_active' => true,
+        ]);
+
+        Http::fake([
+            'https://crm.external-system.com/api/mcp' => Http::response([
+                'jsonrpc' => '2.0',
+                'id' => 1,
+                'result' => [
+                    'tools' => [
+                        [
+                            'name' => 'crm_lookup_deal',
+                            'description' => 'Look up CRM deals by ID',
+                            'inputSchema' => [
+                                'type' => 'object',
+                                'properties' => ['deal_id' => ['type' => 'string']],
+                            ],
+                        ],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $mcpService = app(McpService::class);
+        $result = $mcpService->syncTools($server);
+
+        $this->assertTrue($result['success']);
+        $this->assertEquals(1, $result['count']);
+        $this->assertEquals('crm_lookup_deal', $result['tools'][0]['name']);
+
+        // Must NOT have been hijacked into built-in web_fetch/web_search tools
+        $server->refresh();
+        $this->assertCount(1, $server->tools_cache);
+        $this->assertEquals('crm_lookup_deal', $server->tools_cache[0]['name']);
+    }
+
+    public function test_mcp_sync_tools_parses_snake_case_input_schema_from_fastmcp()
+    {
+        $server = McpServer::create([
+            'name' => 'FastMCP Python Server',
+            'endpoint_url' => 'http://127.0.0.1:5000/mcp',
+            'auth_type' => 'none',
+            'is_active' => true,
+        ]);
+
+        Http::fake([
+            'http://127.0.0.1:5000/mcp' => Http::response([
+                'jsonrpc' => '2.0',
+                'id' => 1,
+                'result' => [
+                    'tools' => [
+                        [
+                            'name' => 'python_math_eval',
+                            'description' => 'Evaluates mathematical formulas',
+                            'input_schema' => [
+                                'type' => 'object',
+                                'properties' => [
+                                    'expression' => ['type' => 'string'],
+                                ],
+                                'required' => ['expression'],
+                            ],
+                        ],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $mcpService = app(McpService::class);
+        $result = $mcpService->syncTools($server);
+
+        $this->assertTrue($result['success']);
+        $this->assertEquals(1, $result['count']);
+        $this->assertEquals('python_math_eval', $result['tools'][0]['name']);
+        $this->assertArrayHasKey('expression', $result['tools'][0]['inputSchema']['properties']);
+    }
 }

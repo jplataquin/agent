@@ -18,9 +18,9 @@
                 <thead class="table-light small text-uppercase">
                     <tr>
                         <th class="ps-3" style="width: 28%;">Server Name</th>
-                        <th style="width: 26%;">Endpoint URL</th>
+                        <th style="width: 24%;">Endpoint URL</th>
                         <th style="width: 14%;">Auth</th>
-                        <th style="width: 14%;">Discovered Tools</th>
+                        <th style="width: 16%;">Discovered Tools</th>
                         <th style="width: 8%;">Status</th>
                         <th class="text-end pe-3" style="width: 10%;">Actions</th>
                     </tr>
@@ -70,12 +70,14 @@
                             </td>
                             <td>
                                 @php $toolsCount = count($server->tools_cache ?? []); @endphp
-                                <span class="badge tools-count-badge {{ $toolsCount > 0 ? 'bg-primary' : 'bg-warning text-dark' }}" id="tools-badge-{{ $server->id }}">
-                                    {{ $toolsCount }} {{ Str::plural('tool', $toolsCount) }}
-                                </span>
+                                <button type="button" class="btn btn-sm p-0 border-0 text-start" data-bs-toggle="modal" data-bs-target="#toolsModal-{{ $server->id }}" title="Click to view discovered tools">
+                                    <span class="badge tools-count-badge {{ $toolsCount > 0 ? 'bg-primary' : 'bg-warning text-dark' }}" id="tools-badge-{{ $server->id }}" style="cursor: pointer;">
+                                        {{ $toolsCount }} {{ Str::plural('tool', $toolsCount) }} <i class="bi bi-eye ms-1"></i>
+                                    </span>
+                                </button>
                                 @if($toolsCount > 0)
                                     <div class="small text-muted mt-1">
-                                        <span class="font-monospace text-truncate d-inline-block" style="max-width: 140px;" title="{{ implode(', ', array_column($server->tools_cache ?? [], 'name')) }}">
+                                        <span class="font-monospace text-truncate d-inline-block" style="max-width: 150px;" title="{{ implode(', ', array_column($server->tools_cache ?? [], 'name')) }}">
                                             {{ implode(', ', array_slice(array_column($server->tools_cache ?? [], 'name'), 0, 2)) }}{{ $toolsCount > 2 ? '...' : '' }}
                                         </span>
                                     </div>
@@ -111,6 +113,72 @@
                                 </form>
                             </td>
                         </tr>
+
+                        <!-- Modal for Inspecting Discovered Tools -->
+                        <div class="modal fade" id="toolsModal-{{ $server->id }}" tabindex="-1" aria-labelledby="toolsModalLabel-{{ $server->id }}" aria-hidden="true">
+                            <div class="modal-dialog modal-dialog-centered modal-lg">
+                                <div class="modal-content border-0 shadow">
+                                    <div class="modal-header bg-light">
+                                        <h5 class="modal-title fw-bold" id="toolsModalLabel-{{ $server->id }}">
+                                            <i class="bi bi-tools text-primary me-2"></i>{{ $server->name }} &mdash; Discovered Tools
+                                        </h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    </div>
+                                    <div class="modal-body p-4">
+                                        <div class="d-flex justify-content-between align-items-center mb-3 p-2 bg-light rounded-3 small">
+                                            <div>
+                                                <span class="text-muted">Endpoint:</span> <code>{{ $server->endpoint_url }}</code>
+                                            </div>
+                                            <div>
+                                                <span class="badge bg-secondary-subtle text-secondary font-monospace">{{ strtoupper($server->auth_type) }}</span>
+                                            </div>
+                                        </div>
+
+                                        <div class="tools-list-container" id="modal-tools-list-{{ $server->id }}">
+                                            @if(count($server->tools_cache ?? []) > 0)
+                                                <div class="list-group">
+                                                    @foreach($server->tools_cache as $tool)
+                                                        <div class="list-group-item p-3 border rounded-3 mb-2">
+                                                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                                                <span class="fw-bold font-monospace text-primary fs-6">{{ $tool['name'] ?? 'Unnamed' }}</span>
+                                                            </div>
+                                                            <p class="small text-muted mb-2">{{ $tool['description'] ?? 'No description provided.' }}</p>
+                                                            @php
+                                                                $schema = $tool['inputSchema'] ?? $tool['input_schema'] ?? $tool['parameters'] ?? null;
+                                                                $props = $schema['properties'] ?? [];
+                                                            @endphp
+                                                            @if(is_array($props) && count($props) > 0)
+                                                                <div class="small bg-light p-2 rounded border">
+                                                                    <span class="fw-semibold text-secondary">Parameters:</span>
+                                                                    <ul class="mb-0 ps-3 mt-1 font-monospace" style="font-size: 0.8rem;">
+                                                                        @foreach($props as $propName => $propDef)
+                                                                            <li>
+                                                                                <strong>{{ $propName }}</strong>
+                                                                                <span class="text-muted">({{ $propDef['type'] ?? 'any' }})</span>:
+                                                                                {{ $propDef['description'] ?? 'No description' }}
+                                                                            </li>
+                                                                        @endforeach
+                                                                    </ul>
+                                                                </div>
+                                                            @endif
+                                                        </div>
+                                                    @endforeach
+                                                </div>
+                                            @else
+                                                <div class="text-center py-4 text-muted">
+                                                    <i class="bi bi-tools fs-1 d-block mb-2 text-secondary"></i>
+                                                    <p class="mb-1">No tools discovered yet.</p>
+                                                    <small>Click <strong>Sync</strong> to query the endpoint and discover available tools.</small>
+                                                </div>
+                                            @endif
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer bg-light">
+                                        <button type="button" class="btn btn-secondary btn-sm rounded-pill" data-bs-dismiss="modal">Close</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     @empty
                         <tr>
                             <td colspan="6" class="text-center py-4 text-muted">No MCP servers registered yet.</td>
@@ -137,6 +205,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const toolsBadge = document.getElementById(`tools-badge-${id}`);
             const errorContainer = document.getElementById(`sync-error-${id}`);
             const statusContainer = document.getElementById(`sync-status-${id}`);
+            const modalToolsList = document.getElementById(`modal-tools-list-${id}`);
 
             // Loading state on button
             this.disabled = true;
@@ -166,8 +235,46 @@ document.addEventListener('DOMContentLoaded', function () {
 
                     // Update tools count badge
                     if (toolsBadge) {
-                        toolsBadge.textContent = `${data.count} ${data.count === 1 ? 'tool' : 'tools'}`;
+                        toolsBadge.innerHTML = `${data.count} ${data.count === 1 ? 'tool' : 'tools'} <i class="bi bi-eye ms-1"></i>`;
                         toolsBadge.className = `badge tools-count-badge ${data.count > 0 ? 'bg-primary' : 'bg-warning text-dark'}`;
+                    }
+
+                    // Update modal content dynamically
+                    if (modalToolsList && Array.isArray(data.tools)) {
+                        if (data.tools.length === 0) {
+                            modalToolsList.innerHTML = `
+                                <div class="text-center py-4 text-muted">
+                                    <i class="bi bi-tools fs-1 d-block mb-2 text-secondary"></i>
+                                    <p class="mb-1">No tools discovered from endpoint.</p>
+                                </div>
+                            `;
+                        } else {
+                            modalToolsList.innerHTML = `<div class="list-group">` + data.tools.map(t => {
+                                const schema = t.inputSchema || t.input_schema || t.parameters || {};
+                                const props = schema.properties || {};
+                                const propKeys = Object.keys(props);
+                                let propsHtml = '';
+                                if (propKeys.length > 0) {
+                                    propsHtml = `
+                                        <div class="small bg-light p-2 rounded border mt-2">
+                                            <span class="fw-semibold text-secondary">Parameters:</span>
+                                            <ul class="mb-0 ps-3 mt-1 font-monospace" style="font-size: 0.8rem;">
+                                                ${propKeys.map(k => `<li><strong>${k}</strong> <span class="text-muted">(${props[k].type || 'any'})</span>: ${props[k].description || ''}</li>`).join('')}
+                                            </ul>
+                                        </div>
+                                    `;
+                                }
+                                return `
+                                    <div class="list-group-item p-3 border rounded-3 mb-2">
+                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                            <span class="fw-bold font-monospace text-primary fs-6">${t.name || 'Unnamed'}</span>
+                                        </div>
+                                        <p class="small text-muted mb-0">${t.description || 'No description provided.'}</p>
+                                        ${propsHtml}
+                                    </div>
+                                `;
+                            }).join('') + `</div>`;
+                        }
                     }
 
                     // Hide any active error box

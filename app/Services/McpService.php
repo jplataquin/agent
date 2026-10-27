@@ -45,12 +45,56 @@ class McpService
     }
 
     /**
-     * Check if the MCP server endpoint refers to our internal built-in server.
+     * Check if the MCP server endpoint refers specifically to our internal built-in server.
+     * Prevents hijacking external servers that share an /api/mcp path or similar names.
      */
     protected function isBuiltInServer(McpServer $server): bool
     {
-        return str_contains($server->endpoint_url, '/api/mcp') ||
-               str_contains(strtolower($server->name), 'built-in');
+        $url = trim($server->endpoint_url);
+
+        // Explicit relative path on current app
+        if ($url === '/api/mcp') {
+            return true;
+        }
+
+        $appUrl = config('app.url', 'http://localhost:8000');
+        $builtInFullUrl = rtrim($appUrl, '/').'/api/mcp';
+        if ($url === $builtInFullUrl) {
+            return true;
+        }
+
+        $parsedUrl = parse_url($url);
+        $path = rtrim($parsedUrl['path'] ?? '', '/');
+
+        // Path must strictly match /api/mcp
+        if ($path !== '/api/mcp') {
+            return false;
+        }
+
+        $parsedAppUrl = parse_url($appUrl);
+        $appHost = strtolower($parsedAppUrl['host'] ?? 'localhost');
+        $appPort = $parsedAppUrl['port'] ?? null;
+
+        $host = strtolower($parsedUrl['host'] ?? '');
+        $port = $parsedUrl['port'] ?? null;
+
+        // In web context, match against current request host and port
+        if (! app()->runningInConsole() && request()->getHost()) {
+            $currentHost = strtolower(request()->getHost());
+            $currentPort = request()->getPort();
+            if ($host === $currentHost && ($port === null || $port === $currentPort)) {
+                return true;
+            }
+        }
+
+        // Match against configured app.url localhost
+        if (in_array($host, [$appHost, 'localhost', '127.0.0.1']) && in_array($appHost, ['localhost', '127.0.0.1'])) {
+            if ($port === $appPort) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -58,7 +102,7 @@ class McpService
      */
     public function syncTools(McpServer $server): array
     {
-        // Internal Built-in Server Bypass
+        // Internal Built-in Server Bypass (Only for THIS application instance)
         if ($this->isBuiltInServer($server)) {
             $tools = $this->builtInTools->getToolsDeclaration();
             $server->update([
@@ -119,13 +163,13 @@ class McpService
     protected function discoverToolsFromEndpoint(McpServer $server): array
     {
         $headers = $this->getHeaders($server);
-        $url = $server->endpoint_url;
+        $url = trim($server->endpoint_url);
 
         // 1. If endpoint points to an SSE route (e.g. ends with /sse)
         $path = parse_url($url, PHP_URL_PATH) ?? '';
         if (str_ends_with(strtolower($path), '/sse')) {
             $sseResult = $this->discoverViaSse($server, $url);
-            if ($sseResult['success']) {
+            if ($sseResult['success'] && ! empty($sseResult['tools'])) {
                 return $sseResult;
             }
         }
@@ -140,17 +184,13 @@ class McpService
         $initResult = $this->performInitializeHandshake($url, $headers);
         if ($initResult['success']) {
             $retryResult = $this->queryToolsList($url, $headers);
-            if ($retryResult['success']) {
+            if ($retryResult['success'] && ! empty($retryResult['tools'])) {
                 return $retryResult;
             }
         }
 
-        // If direct post succeeded with 0 tools and no error, return it
-        if ($postResult['success']) {
-            return $postResult;
-        }
-
-        // 4. Try candidate paths if URL has no specific path
+        // 4. Try candidate paths if URL has no specific path or returned 404/405
+        $candidates = [];
         if (empty($path) || $path === '/') {
             $candidates = [
                 rtrim($url, '/').'/mcp',
@@ -158,22 +198,31 @@ class McpService
                 rtrim($url, '/').'/api/mcp',
                 rtrim($url, '/').'/sse',
             ];
+        } elseif (! str_ends_with($url, '/sse')) {
+            $candidates = [
+                rtrim($url, '/').'/sse',
+            ];
+        }
 
-            foreach ($candidates as $candidate) {
-                if (str_ends_with($candidate, '/sse')) {
-                    $candidateRes = $this->discoverViaSse($server, $candidate);
-                } else {
+        foreach ($candidates as $candidate) {
+            if (str_ends_with($candidate, '/sse')) {
+                $candidateRes = $this->discoverViaSse($server, $candidate);
+            } else {
+                $candidateRes = $this->queryToolsList($candidate, $headers);
+                if (! $candidateRes['success']) {
+                    $this->performInitializeHandshake($candidate, $headers);
                     $candidateRes = $this->queryToolsList($candidate, $headers);
-                    if (! $candidateRes['success']) {
-                        $this->performInitializeHandshake($candidate, $headers);
-                        $candidateRes = $this->queryToolsList($candidate, $headers);
-                    }
-                }
-
-                if ($candidateRes['success']) {
-                    return $candidateRes;
                 }
             }
+
+            if ($candidateRes['success'] && ! empty($candidateRes['tools'])) {
+                return $candidateRes;
+            }
+        }
+
+        // If direct post succeeded (even with 0 tools), return it
+        if ($postResult['success']) {
+            return $postResult;
         }
 
         // 5. Fallback: REST GET /tools or GET /
@@ -287,17 +336,29 @@ class McpService
     {
         $headers = $this->getHeaders($server);
         $headers['Accept'] = 'text/event-stream';
+        $headerLines = [];
+        foreach ($headers as $k => $v) {
+            $headerLines[] = "{$k}: {$v}";
+        }
 
-        try {
-            $response = Http::withoutVerifying()
-                ->withHeaders($headers)
-                ->timeout(6)
-                ->get($sseUrl);
+        $parsed = parse_url($sseUrl);
+        $baseUrl = ($parsed['scheme'] ?? 'http').'://'.($parsed['host'] ?? 'localhost').(isset($parsed['port']) ? ':'.$parsed['port'] : '');
 
-            if ($response->successful()) {
-                $body = $response->body();
-                $messageEndpoint = null;
-                $lines = explode("\n", $body);
+        $messageEndpoint = null;
+        $sseBuffer = '';
+
+        if (function_exists('curl_init')) {
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $sseUrl);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headerLines);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 6);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+
+            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($curl, $chunk) use (&$sseBuffer, &$messageEndpoint) {
+                $sseBuffer .= $chunk;
+                $lines = explode("\n", $sseBuffer);
                 $isEndpointEvent = false;
 
                 foreach ($lines as $line) {
@@ -305,36 +366,81 @@ class McpService
                     if (str_starts_with($line, 'event: endpoint')) {
                         $isEndpointEvent = true;
                     } elseif ($isEndpointEvent && str_starts_with($line, 'data:')) {
-                        $dataPart = trim(substr($line, 5));
-                        if (! empty($dataPart)) {
-                            $messageEndpoint = $dataPart;
-                            break;
+                        $endpointPart = trim(substr($line, 5));
+                        if (! empty($endpointPart)) {
+                            $messageEndpoint = $endpointPart;
+
+                            return 0; // Abort transfer immediately
                         }
-                    } elseif (str_starts_with($line, 'data:') && str_contains($line, 'messages')) {
-                        $dataPart = trim(substr($line, 5));
-                        if (! empty($dataPart)) {
-                            $messageEndpoint = $dataPart;
-                            break;
+                    } elseif (str_starts_with($line, 'data:') && (str_contains($line, 'message') || str_contains($line, 'sessionId'))) {
+                        $endpointPart = trim(substr($line, 5));
+                        if (! empty($endpointPart) && (str_starts_with($endpointPart, '/') || str_starts_with($endpointPart, 'http'))) {
+                            $messageEndpoint = $endpointPart;
+
+                            return 0;
                         }
                     }
                 }
 
-                if ($messageEndpoint) {
-                    // Resolve relative URI to absolute URL
-                    if (str_starts_with($messageEndpoint, '/')) {
-                        $parsed = parse_url($sseUrl);
-                        $base = ($parsed['scheme'] ?? 'http').'://'.($parsed['host'] ?? 'localhost').(isset($parsed['port']) ? ':'.$parsed['port'] : '');
-                        $messageEndpoint = $base.$messageEndpoint;
-                    }
-
-                    $headers['Accept'] = 'application/json';
-                    $this->performInitializeHandshake($messageEndpoint, $headers);
-
-                    return $this->queryToolsList($messageEndpoint, $headers);
+                if (strlen($sseBuffer) > 16384) {
+                    return 0;
                 }
+
+                return strlen($chunk);
+            });
+
+            curl_exec($ch);
+            curl_close($ch);
+        }
+
+        // Fallback if curl writefunction didn't find endpoint
+        if (! $messageEndpoint) {
+            try {
+                $response = Http::withoutVerifying()
+                    ->withHeaders($headers)
+                    ->timeout(5)
+                    ->get($sseUrl);
+
+                if ($response->successful()) {
+                    $body = $response->body();
+                    $lines = explode("\n", $body);
+                    $isEndpointEvent = false;
+
+                    foreach ($lines as $line) {
+                        $line = trim($line);
+                        if (str_starts_with($line, 'event: endpoint')) {
+                            $isEndpointEvent = true;
+                        } elseif ($isEndpointEvent && str_starts_with($line, 'data:')) {
+                            $endpointPart = trim(substr($line, 5));
+                            if (! empty($endpointPart)) {
+                                $messageEndpoint = $endpointPart;
+                                break;
+                            }
+                        } elseif (str_starts_with($line, 'data:') && str_contains($line, 'messages')) {
+                            $endpointPart = trim(substr($line, 5));
+                            if (! empty($endpointPart)) {
+                                $messageEndpoint = $endpointPart;
+                                break;
+                            }
+                        }
+                    }
+                }
+            } catch (Exception $e) {
+                Log::debug('MCP SSE fallback discovery error: '.$e->getMessage());
             }
-        } catch (Exception $e) {
-            Log::debug('MCP SSE discovery error: '.$e->getMessage());
+        }
+
+        if ($messageEndpoint) {
+            if (str_starts_with($messageEndpoint, '/')) {
+                $messageEndpoint = $baseUrl.$messageEndpoint;
+            }
+
+            $jsonHeaders = $this->getHeaders($server);
+            $jsonHeaders['Accept'] = 'application/json';
+
+            $this->performInitializeHandshake($messageEndpoint, $jsonHeaders);
+
+            return $this->queryToolsList($messageEndpoint, $jsonHeaders);
         }
 
         return ['success' => false, 'error' => 'Could not negotiate MCP SSE transport.'];
@@ -388,6 +494,12 @@ class McpService
                 $rawTools = $data['result'];
             } elseif (array_is_list($data)) {
                 $rawTools = $data;
+            } elseif (isset($data['data']['tools']) && is_array($data['data']['tools'])) {
+                $rawTools = $data['data']['tools'];
+            } elseif (isset($data['data']) && is_array($data['data']) && array_is_list($data['data'])) {
+                $rawTools = $data['data'];
+            } elseif (isset($data['result']['data']) && is_array($data['result']['data'])) {
+                $rawTools = $data['result']['data'];
             }
         }
 
@@ -404,13 +516,32 @@ class McpService
                 continue;
             }
 
-            $schema = $tool['inputSchema'] ?? $tool['parameters'] ?? [
-                'type' => 'object',
-                'properties' => (object) [],
-            ];
+            // Support inputSchema, input_schema, parameters, schema, args
+            $schema = $tool['inputSchema']
+                ?? $tool['input_schema']
+                ?? $tool['parameters']
+                ?? $tool['schema']
+                ?? [
+                    'type' => 'object',
+                    'properties' => (object) [],
+                ];
+
+            if (! is_array($schema) || empty($schema)) {
+                $schema = [
+                    'type' => 'object',
+                    'properties' => (object) [],
+                ];
+            } else {
+                if (! isset($schema['type'])) {
+                    $schema['type'] = 'object';
+                }
+                if (! isset($schema['properties']) || (is_array($schema['properties']) && empty($schema['properties']))) {
+                    $schema['properties'] = (object) [];
+                }
+            }
 
             $normalized[] = [
-                'name' => $name,
+                'name' => trim($name),
                 'description' => $tool['description'] ?? 'MCP tool provided by server',
                 'inputSchema' => $schema,
             ];
@@ -438,10 +569,28 @@ class McpService
                     continue;
                 }
 
-                $parameters = $tool['inputSchema'] ?? $tool['parameters'] ?? [
-                    'type' => 'object',
-                    'properties' => (object) [],
-                ];
+                $parameters = $tool['inputSchema']
+                    ?? $tool['input_schema']
+                    ?? $tool['parameters']
+                    ?? $tool['schema']
+                    ?? [
+                        'type' => 'object',
+                        'properties' => (object) [],
+                    ];
+
+                if (! is_array($parameters) || empty($parameters)) {
+                    $parameters = [
+                        'type' => 'object',
+                        'properties' => (object) [],
+                    ];
+                } else {
+                    if (! isset($parameters['type'])) {
+                        $parameters['type'] = 'object';
+                    }
+                    if (! isset($parameters['properties']) || (is_array($parameters['properties']) && empty($parameters['properties']))) {
+                        $parameters['properties'] = (object) [];
+                    }
+                }
 
                 $formattedTools[] = [
                     'type' => 'function',
@@ -510,6 +659,22 @@ class McpService
 
             if ($response->successful()) {
                 $data = $response->json();
+
+                // If error indicates uninitialized, handshake and retry once
+                if (is_array($data) && isset($data['error'])) {
+                    $errCode = $data['error']['code'] ?? 0;
+                    $errMsg = $data['error']['message'] ?? '';
+                    if ($errCode === -32002 || str_contains(strtolower($errMsg), 'not initialized')) {
+                        $this->performInitializeHandshake($targetServer->endpoint_url, $headers);
+                        $retry = Http::withoutVerifying()
+                            ->withHeaders($headers)
+                            ->timeout(30)
+                            ->post($targetServer->endpoint_url, $payload);
+                        if ($retry->successful()) {
+                            $data = $retry->json();
+                        }
+                    }
+                }
 
                 if (is_array($data) && isset($data['error'])) {
                     $err = is_array($data['error']) ? ($data['error']['message'] ?? json_encode($data['error'])) : (string) $data['error'];
