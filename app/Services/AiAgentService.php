@@ -43,7 +43,12 @@ class AiAgentService
             }
         }
 
-        $promptParts[] = "\nWhen relevant, use the available tools connected via MCP to look up live internal data before responding. Never fabricate data from internal systems if a tool is available.";
+        $promptParts[] = "\nWhen relevant, use the available tools connected via MCP to look up live internal data before responding. Never fabricate data from internal systems if a tool is available.
+
+Important Tool Response Guidelines:
+- Tool execution results and tool JSON payloads are strictly for your internal reference.
+- NEVER output raw JSON, JSON schemas, or raw tool response data in your chat response to the user.
+- Always synthesize the tool results into a friendly, clear, natural, and helpful answer in plain text or Markdown.";
 
         return implode("\n\n", $promptParts);
     }
@@ -200,6 +205,7 @@ class AiAgentService
 
                 // Final answer produced naturally by the model
                 $content = $llmResponse->content ?? 'Response completed.';
+                $content = $this->cleanAssistantReply($content);
 
                 if ($onChunk) {
                     $onChunk($content);
@@ -314,5 +320,57 @@ class AiAgentService
             'total_tokens' => $totalTokens,
             'estimated_cost' => $estimatedCost,
         ]);
+    }
+
+    /**
+     * Ensure the final assistant response does not leak raw tool JSON payloads.
+     */
+    protected function cleanAssistantReply(string $content): string
+    {
+        $trimmed = trim($content);
+
+        // Check for markdown code blocks containing json with tool-like structures
+        if (preg_match('/^```(?:json)?\s*(\{[\s\S]*\}|\[[\s\S]*\])\s*```$/', $trimmed, $matches)) {
+            $parsed = json_decode($matches[1], true);
+            if (is_array($parsed)) {
+                return $this->formatJsonPayloadToText($parsed);
+            }
+        }
+
+        // Check if the entire reply is a raw JSON string
+        if ((str_starts_with($trimmed, '{') && str_ends_with($trimmed, '}')) ||
+            (str_starts_with($trimmed, '[') && str_ends_with($trimmed, ']'))) {
+            $parsed = json_decode($trimmed, true);
+            if (is_array($parsed)) {
+                return $this->formatJsonPayloadToText($parsed);
+            }
+        }
+
+        return $content;
+    }
+
+    protected function formatJsonPayloadToText(array $data): string
+    {
+        if (isset($data['output']) && is_string($data['output'])) {
+            return $data['output'];
+        }
+        if (isset($data['result']) && is_string($data['result'])) {
+            return $data['result'];
+        }
+        if (isset($data['message']) && is_string($data['message'])) {
+            return $data['message'];
+        }
+
+        $lines = [];
+        foreach ($data as $key => $val) {
+            $label = ucwords(str_replace('_', ' ', (string) $key));
+            if (is_array($val)) {
+                $lines[] = "**{$label}**: ".json_encode($val, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            } else {
+                $lines[] = "**{$label}**: {$val}";
+            }
+        }
+
+        return implode("\n\n", $lines);
     }
 }

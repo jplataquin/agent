@@ -49,25 +49,30 @@ class OpenAiAdapter implements LlmAdapterInterface
             ];
             if ($msg['role'] === 'tool') {
                 $entry['tool_call_id'] = $msg['tool_call_id'] ?? '';
+                $entry['content'] = is_string($msg['content'] ?? '') ? $msg['content'] : json_encode($msg['content'] ?? '');
             }
-            if ($msg['role'] === 'assistant' && ! empty($msg['tool_calls'])) {
-                $cleanToolCalls = [];
-                foreach ($msg['tool_calls'] as $tc) {
-                    $funcName = $tc['function']['name'] ?? $tc['name'] ?? '';
-                    $rawArgs = $tc['function']['arguments'] ?? $tc['arguments'] ?? [];
-                    $argsJson = is_string($rawArgs) ? $rawArgs : json_encode($rawArgs ?: (object) []);
+            if ($msg['role'] === 'assistant') {
+                if (! empty($msg['tool_calls'])) {
+                    $cleanToolCalls = [];
+                    foreach ($msg['tool_calls'] as $tc) {
+                        $funcName = $tc['function']['name'] ?? $tc['name'] ?? '';
+                        $rawArgs = $tc['function']['arguments'] ?? $tc['arguments'] ?? [];
+                        $argsJson = is_string($rawArgs) ? $rawArgs : json_encode($rawArgs ?: (object) []);
 
-                    $cleanToolCalls[] = [
-                        'id' => $tc['id'] ?? 'call_'.uniqid(),
-                        'type' => 'function',
-                        'function' => [
-                            'name' => $funcName,
-                            'arguments' => $argsJson,
-                        ],
-                    ];
+                        $cleanToolCalls[] = [
+                            'id' => $tc['id'] ?? 'call_'.uniqid(),
+                            'type' => 'function',
+                            'function' => [
+                                'name' => $funcName,
+                                'arguments' => $argsJson,
+                            ],
+                        ];
+                    }
+                    $entry['tool_calls'] = $cleanToolCalls;
+                    $entry['content'] = ! empty($msg['content']) ? $msg['content'] : null;
+                } else {
+                    $entry['content'] = ! empty($msg['content']) ? $msg['content'] : ' ';
                 }
-                $entry['tool_calls'] = $cleanToolCalls;
-                $entry['content'] = $msg['content'] ?? '';
             }
             $formattedMessages[] = $entry;
         }

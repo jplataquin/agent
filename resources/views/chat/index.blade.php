@@ -899,7 +899,7 @@
                             </div>
 
                         @elseif($message->role === 'assistant')
-                            @if(!empty($message->content))
+                            @if(! empty(trim($message->content ?? '')))
                             <div class="message-row assistant-row" id="msg-row-{{ $message->id }}">
                                 <div class="message-bubble message-assistant markdown-body" id="assistant-content-{{ $message->id }}" data-raw-content="{{ e($message->content) }}">
                                     {!! $message->content !!}
@@ -1614,7 +1614,6 @@
             this.style.height = 'auto';
             this.style.height = (Math.min(this.scrollHeight, 120)) + 'px';
         });
-
         // Speech-to-Text (STT) implementation
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         let recognition = null;
