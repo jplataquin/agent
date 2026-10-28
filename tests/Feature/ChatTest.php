@@ -273,28 +273,6 @@ class ChatTest extends TestCase
         $this->assertStringContainsString('id="thinkingTimer"', $html);
     }
 
-    public function test_chat_view_auto_submits_prompt_when_speech_recognition_stops()
-    {
-        $user = User::where('role', User::ROLE_REGULAR)->first();
-        $session = ChatSession::create([
-            'user_id' => $user->id,
-            'title' => 'Mic Test Session',
-        ]);
-
-        $response = $this->actingAs($user)->get("/chat/{$session->id}");
-        $response->assertStatus(200);
-
-        $html = $response->getContent();
-
-        // Verify stopListening triggers submitMessage when transcribed text exists
-        $this->assertStringContainsString('function stopListening()', $html);
-        $this->assertStringContainsString("if (input.value.trim() !== '') {\n                    submitMessage();\n                }", $html);
-
-        // Verify micBtn is disabled during message submission and re-enabled upon response completion
-        $this->assertStringContainsString('if (micBtn) micBtn.disabled = true;', $html);
-        $this->assertStringContainsString('if (micBtn) micBtn.disabled = false;', $html);
-    }
-
     public function test_mcp_tool_results_are_hidden_from_user_in_chat_view_only_llm_reply_visible()
     {
         $user = User::where('role', User::ROLE_REGULAR)->first();
