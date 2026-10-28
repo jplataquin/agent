@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="pwaBgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2563eb"/>
+      <stop offset="50%" stop-color="#1d4ed8"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="pwaHeadGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#e2e8f0"/>
+    </linearGradient>
+    <linearGradient id="pwaVisorGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#090d16"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <filter id="pwaGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="url(#pwaBgGrad)"/>
+
+  <g >
+    <!-- Antenna -->
+    <line x1="256" y1="135" x2="256" y2="80" stroke="#93c5fd" stroke-width="12" stroke-linecap="round"/>
+    <circle cx="256" cy="75" r="18" fill="#38bdf8" filter="url(#pwaGlow)"/>
+
+    <!-- Ear pieces / Headset -->
+    <rect x="90" y="210" width="28" height="90" rx="14" fill="#60a5fa"/>
+    <rect x="394" y="210" width="28" height="90" rx="14" fill="#60a5fa"/>
+
+    <!-- Robot Head Frame -->
+    <rect x="110" y="140" width="292" height="230" rx="56" fill="url(#pwaHeadGrad)"/>
+
+    <!-- Visor Display Screen -->
+    <rect x="142" y="176" width="228" height="136" rx="34" fill="url(#pwaVisorGrad)"/>
+
+    <!-- Glowing Cyan Eyes -->
+    <circle cx="205" cy="242" r="24" fill="#38bdf8" filter="url(#pwaGlow)"/>
+    <circle cx="212" cy="236" r="7" fill="#ffffff"/>
+    <circle cx="307" cy="242" r="24" fill="#38bdf8" filter="url(#pwaGlow)"/>
+    <circle cx="314" cy="236" r="7" fill="#ffffff"/>
+
+    <!-- Curved Smile / Audio Pulse -->
+    <path d="M 216 335 Q 256 358 296 335" stroke="#2563eb" stroke-width="8" stroke-linecap="round" fill="none"/>
+
+    <!-- Collar / Body Base -->
+    <path d="M 190 395 L 322 395 L 340 435 L 172 435 Z" fill="#60a5fa" opacity="0.9"/>
+    <circle cx="256" cy="415" r="8" fill="#ffffff"/>
+
+    <!-- AI Sparkle -->
+    <path d="M 395 105 Q 405 120 420 130 Q 405 140 395 155 Q 385 140 370 130 Q 385 120 395 105 Z" fill="#38bdf8"/>
+  </g>
+</svg>
