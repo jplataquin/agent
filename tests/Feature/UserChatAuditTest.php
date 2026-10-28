@@ -106,30 +106,52 @@ class UserChatAuditTest extends TestCase
         $regularUser = User::where('role', User::ROLE_REGULAR)->first();
         $admin = User::where('role', User::ROLE_ADMIN)->first();
 
-        $session = ChatSession::create([
+        $sessionRegular = ChatSession::create([
             'user_id' => $regularUser->id,
             'title' => 'Employee Benefits Inquiries',
         ]);
 
+        $sessionAdmin = ChatSession::create([
+            'user_id' => $admin->id,
+            'title' => 'Executive Strategic Roadmap',
+        ]);
+
         ChatMessage::create([
-            'chat_session_id' => $session->id,
+            'chat_session_id' => $sessionRegular->id,
             'role' => ChatMessage::ROLE_USER,
             'content' => 'What is the health insurance policy?',
         ]);
 
         ChatMessage::create([
-            'chat_session_id' => $session->id,
+            'chat_session_id' => $sessionRegular->id,
             'role' => ChatMessage::ROLE_ASSISTANT,
             'content' => 'Full dental, vision, and health are provided.',
         ]);
 
+        ChatMessage::create([
+            'chat_session_id' => $sessionAdmin->id,
+            'role' => ChatMessage::ROLE_USER,
+            'content' => 'Review Q4 deliverables',
+        ]);
+
+        // By default (role=all), both regular and admin sessions are visible
         $response = $this->actingAs($admin)->get('/admin/user-chats');
 
         $response->assertStatus(200);
         $response->assertSee('Employee Benefits Inquiries');
+        $response->assertSee('Executive Strategic Roadmap');
         $response->assertSee($regularUser->name);
-        $response->assertSee($regularUser->email);
-        $response->assertSee('Recorded Conversations');
+        $response->assertSee($admin->name);
+
+        // When filtering specifically by regular role, admin session is excluded
+        $regularOnlyResponse = $this->actingAs($admin)->get('/admin/user-chats?role=regular');
+        $regularOnlyResponse->assertSee('Employee Benefits Inquiries');
+        $regularOnlyResponse->assertDontSee('Executive Strategic Roadmap');
+
+        // When filtering specifically by admin role, regular session is excluded
+        $adminOnlyResponse = $this->actingAs($admin)->get('/admin/user-chats?role=admin');
+        $adminOnlyResponse->assertSee('Executive Strategic Roadmap');
+        $adminOnlyResponse->assertDontSee('Employee Benefits Inquiries');
     }
 
     public function test_admin_can_view_regular_user_chat_transcript(): void

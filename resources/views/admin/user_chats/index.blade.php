@@ -66,7 +66,7 @@
                 <div class="col-12 col-md-3">
                     <label class="small text-muted mb-1">Filter by User</label>
                     <select name="user_id" class="form-select form-select-sm">
-                        <option value="">All Regular Users</option>
+                        <option value="">All Users</option>
                         @foreach($users as $u)
                             <option value="{{ $u->id }}" {{ request('user_id') == $u->id ? 'selected' : '' }}>
                                 {{ $u->name }} ({{ $u->email }}) [{{ ucfirst($u->role) }}]
@@ -79,8 +79,8 @@
                 <div class="col-6 col-md-2">
                     <label class="small text-muted mb-1">Role Filter</label>
                     <select name="role" class="form-select form-select-sm">
-                        <option value="regular" {{ request('role', 'regular') === 'regular' ? 'selected' : '' }}>Regular Users Only</option>
-                        <option value="all" {{ request('role') === 'all' ? 'selected' : '' }}>All Users (Incl. Admin)</option>
+                        <option value="all" {{ request('role', 'all') === 'all' ? 'selected' : '' }}>All Users (Incl. Admin)</option>
+                        <option value="regular" {{ request('role') === 'regular' ? 'selected' : '' }}>Regular Users Only</option>
                         <option value="admin" {{ request('role') === 'admin' ? 'selected' : '' }}>Admins Only</option>
                     </select>
                 </div>
@@ -108,7 +108,7 @@
                     <button type="submit" class="btn btn-sm btn-primary flex-fill">
                         <i class="bi bi-filter"></i> Apply
                     </button>
-                    @if(request()->anyFilled(['user_id', 'search', 'status', 'date_from', 'date_to']) || (request('role') && request('role') !== 'regular'))
+                    @if(request()->anyFilled(['user_id', 'search', 'status', 'date_from', 'date_to']) || (request('role') && request('role') !== 'all'))
                         <a href="{{ route('admin.user-chats.index') }}" class="btn btn-sm btn-outline-secondary" title="Reset Filters">
                             <i class="bi bi-x-circle"></i>
                         </a>

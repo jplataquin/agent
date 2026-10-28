@@ -16,7 +16,7 @@ class UserChatController extends Controller
      */
     public function index(Request $request)
     {
-        $roleFilter = $request->input('role', User::ROLE_REGULAR);
+        $roleFilter = $request->input('role', 'all');
 
         $query = ChatSession::withTrashed()
             ->with(['user'])
@@ -26,7 +26,7 @@ class UserChatController extends Controller
                 'assistantMessages',
             ]);
 
-        // Filter by role (default: regular users only)
+        // Filter by role (default: all users)
         if ($roleFilter !== 'all') {
             $query->whereHas('user', function ($q) use ($roleFilter) {
                 $q->where('role', $roleFilter);
@@ -68,21 +68,25 @@ class UserChatController extends Controller
 
         $sessions = $query->latest('updated_at')->paginate(15)->withQueryString();
 
-        // Calculate summary KPI stats for regular users
-        $regularUserIds = User::where('role', User::ROLE_REGULAR)->pluck('id');
-        $regularSessionsQuery = ChatSession::withTrashed()->whereIn('user_id', $regularUserIds);
+        // Calculate summary KPI stats based on active role filter
+        $targetUserIds = match ($roleFilter) {
+            'regular' => User::where('role', User::ROLE_REGULAR)->pluck('id'),
+            'admin' => User::where('role', User::ROLE_ADMIN)->pluck('id'),
+            default => User::pluck('id'),
+        };
+        $kpiSessionsQuery = ChatSession::withTrashed()->whereIn('user_id', $targetUserIds);
 
         $kpi = [
-            'total_sessions' => (clone $regularSessionsQuery)->count(),
-            'total_user_prompts' => ChatMessage::whereHas('session', function ($q) use ($regularUserIds) {
-                $q->withTrashed()->whereIn('user_id', $regularUserIds);
+            'total_sessions' => (clone $kpiSessionsQuery)->count(),
+            'total_user_prompts' => ChatMessage::whereHas('session', function ($q) use ($targetUserIds) {
+                $q->withTrashed()->whereIn('user_id', $targetUserIds);
             })->where('role', ChatMessage::ROLE_USER)->count(),
-            'total_assistant_replies' => ChatMessage::whereHas('session', function ($q) use ($regularUserIds) {
-                $q->withTrashed()->whereIn('user_id', $regularUserIds);
+            'total_assistant_replies' => ChatMessage::whereHas('session', function ($q) use ($targetUserIds) {
+                $q->withTrashed()->whereIn('user_id', $targetUserIds);
             })->where('role', ChatMessage::ROLE_ASSISTANT)->count(),
-            'total_regular_tokens' => TokenMetric::whereIn('user_id', $regularUserIds)->sum('total_tokens'),
-            'total_regular_cost' => TokenMetric::whereIn('user_id', $regularUserIds)->sum('estimated_cost'),
-            'active_chatters_count' => (clone $regularSessionsQuery)->distinct('user_id')->count('user_id'),
+            'total_regular_tokens' => TokenMetric::whereIn('user_id', $targetUserIds)->sum('total_tokens'),
+            'total_regular_cost' => TokenMetric::whereIn('user_id', $targetUserIds)->sum('estimated_cost'),
+            'active_chatters_count' => (clone $kpiSessionsQuery)->distinct('user_id')->count('user_id'),
         ];
 
         $users = User::orderBy('name')->get();
