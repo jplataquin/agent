@@ -45,6 +45,9 @@ You are operating in a multi-agent environment where multiple Gemini sessions ru
       - Mark your state file `.agent-states/<your_agent_id>.md` as `Status: Idle` or remove it.
       - Announce: `🚀 Task successfully combined and shipped directly to main!`
 
+## Testing Guidelines
+- **Targeted Testing**: Do not run the entire application test suite (e.g., `php artisan test`) for small code changes. Instead, use targeted testing (e.g., `php artisan test --filter=TestClassName` or specifying the file path) to run only the tests relevant to the code you added or modified. This saves time and resources.
+
 ## Styling Rules
 - **Dark Theme Mode Compatibility**: Do not use hardcoded `bg-white` classes in HTML/Blade views, as they break contrast in dark mode. Instead, use contextual classes, theme-aware Bootstrap classes (e.g., `bg-body`, `bg-body-secondary`), or rely on default component styling (e.g., standard `.card` or `.card-header` backgrounds).
 

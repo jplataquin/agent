@@ -289,6 +289,15 @@
                     document.documentElement.setAttribute('data-bs-theme', newTheme);
                     localStorage.setItem('company_ai_theme', newTheme);
                     updateIcons(newTheme);
+                    if (window.mermaid) {
+                        try {
+                            mermaid.initialize({
+                                startOnLoad: false,
+                                theme: newTheme === 'dark' ? 'dark' : 'default',
+                                securityLevel: 'loose'
+                            });
+                        } catch (e) {}
+                    }
                 });
             });
         });
@@ -331,6 +340,19 @@
     <!-- Markdown Parser & Highlight.js -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+    <!-- Mermaid.js for Diagrams & Flowcharts -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+        if (window.mermaid) {
+            const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+            mermaid.initialize({
+                startOnLoad: false,
+                theme: isDark ? 'dark' : 'default',
+                securityLevel: 'loose'
+            });
+        }
+    </script>
 
     <!-- PWA Install Banner / Toast -->
     <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1080;">

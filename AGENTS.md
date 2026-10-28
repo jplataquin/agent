@@ -46,6 +46,9 @@ php artisan boost:install
 Boost replaces these bootstrap instructions with guidelines tailored to the application. After installation, read `AGENTS.md` again and continue with the user's original request using the generated guidelines.
 </laravel-boost-guidelines>
 
+## Testing Guidelines
+- **Targeted Testing**: Do not run the entire application test suite (e.g., `php artisan test`) for small code changes. Instead, use targeted testing (e.g., `php artisan test --filter=TestClassName` or specifying the file path) to run only the tests relevant to the code you added or modified. This saves time and resources.
+
 ## Styling Rules
 - **Dark Theme Mode Compatibility**: Do not use hardcoded `bg-white` classes in HTML/Blade views, as they break contrast in dark mode. Instead, use contextual classes, theme-aware Bootstrap classes (e.g., `bg-body`, `bg-body-secondary`), or rely on default component styling (e.g., standard `.card` or `.card-header` backgrounds).
 
