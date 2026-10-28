@@ -160,12 +160,6 @@
                                 </li>
                             @endif
                         @endauth
-
-                        <li class="nav-item">
-                            <a class="nav-link fw-semibold {{ request()->is('diagnostics*') ? 'active text-primary' : '' }}" href="{{ route('diagnostics.gemini') }}">
-                                <i class="bi bi-cpu me-1"></i> Gemini 3 Diagnostics
-                            </a>
-                        </li>
                     </ul>
 
                     <!-- Right Side Of Navbar -->
