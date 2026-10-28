@@ -94,16 +94,142 @@ class DatabaseSeeder extends Seeder
                 'tools_cache' => [
                     [
                         'name' => 'search_internal_docs',
-                        'description' => 'Search company confluence and policy docs for a given query term',
-                        'parameters' => [
+                        'description' => 'Search company confluence and policy docs for a given query string.',
+                        'inputSchema' => [
                             'type' => 'object',
                             'properties' => [
                                 'query' => [
                                     'type' => 'string',
-                                    'description' => 'The search query or keyword',
+                                    'description' => 'Keyword query to search in internal documentation',
                                 ],
                             ],
                             'required' => ['query'],
+                        ],
+                    ],
+                ],
+                'is_active' => true,
+            ]
+        );
+
+        // Local Stateful Playwright Browser MCP Server
+        McpServer::updateOrCreate(
+            ['name' => 'Playwright Headless Browser MCP'],
+            [
+                'endpoint_url' => 'http://localhost:3030/mcp',
+                'auth_type' => 'none',
+                'auth_token' => null,
+                'description' => 'Stateful Playwright browser MCP server for interactive web browsing, clicking, typing, and page inspection.',
+                'tools_cache' => [
+                    [
+                        'name' => 'browser_navigate',
+                        'description' => 'Navigate the headless browser to a specified URL, waiting for page load, and return the page title, URL, interactive elements, and content.',
+                        'inputSchema' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'url' => [
+                                    'type' => 'string',
+                                    'description' => 'The target website URL to navigate to (e.g. https://news.ycombinator.com)',
+                                ],
+                                'wait_until' => [
+                                    'type' => 'string',
+                                    'description' => 'When to consider navigation succeeded: "load", "domcontentloaded", or "networkidle"',
+                                    'enum' => ['load', 'domcontentloaded', 'networkidle'],
+                                ],
+                                'timeout' => [
+                                    'type' => 'integer',
+                                    'description' => 'Timeout in milliseconds (default: 30000)',
+                                ],
+                            ],
+                            'required' => ['url'],
+                        ],
+                    ],
+                    [
+                        'name' => 'browser_click',
+                        'description' => 'Click an element or button on the page using a CSS selector or Playwright text locator.',
+                        'inputSchema' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'selector' => [
+                                    'type' => 'string',
+                                    'description' => 'CSS selector or text locator of the element to click',
+                                ],
+                                'wait_after' => [
+                                    'type' => 'integer',
+                                    'description' => 'Milliseconds to wait after click for DOM or network response',
+                                ],
+                            ],
+                            'required' => ['selector'],
+                        ],
+                    ],
+                    [
+                        'name' => 'browser_type',
+                        'description' => 'Fill or type text into an input field or textarea on the active page.',
+                        'inputSchema' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'selector' => [
+                                    'type' => 'string',
+                                    'description' => 'Selector of the input element',
+                                ],
+                                'text' => [
+                                    'type' => 'string',
+                                    'description' => 'The text string to type into the field',
+                                ],
+                                'press_enter' => [
+                                    'type' => 'boolean',
+                                    'description' => 'Whether to press Enter key immediately after typing',
+                                ],
+                            ],
+                            'required' => ['selector', 'text'],
+                        ],
+                    ],
+                    [
+                        'name' => 'browser_press_key',
+                        'description' => 'Press a keyboard key on the active page (e.g. "Enter", "Tab", "Escape").',
+                        'inputSchema' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'key' => [
+                                    'type' => 'string',
+                                    'description' => 'Key name to press (e.g. "Enter", "Escape", "Tab")',
+                                ],
+                            ],
+                            'required' => ['key'],
+                        ],
+                    ],
+                    [
+                        'name' => 'browser_snapshot',
+                        'description' => 'Get a fresh snapshot of the active page including title, URL, visible interactive elements, and content.',
+                        'inputSchema' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'max_length' => [
+                                    'type' => 'integer',
+                                    'description' => 'Maximum characters of body text to return',
+                                ],
+                            ],
+                        ],
+                    ],
+                    [
+                        'name' => 'browser_evaluate',
+                        'description' => 'Safely execute a JavaScript expression in the browser page context and return the result as JSON.',
+                        'inputSchema' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'script' => [
+                                    'type' => 'string',
+                                    'description' => 'JavaScript expression to evaluate',
+                                ],
+                            ],
+                            'required' => ['script'],
+                        ],
+                    ],
+                    [
+                        'name' => 'browser_reset',
+                        'description' => 'Reset the browser session, closing the current page and clearing all cookies and navigation state.',
+                        'inputSchema' => [
+                            'type' => 'object',
+                            'properties' => (object) [],
                         ],
                     ],
                 ],
