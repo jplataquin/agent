@@ -173,6 +173,9 @@ class ChatTest extends TestCase
         // Verify messageUrl and streamUrl are relative paths (no host/port) to eliminate CORS and origin mismatch
         $this->assertStringContainsString('const messageUrl = "/chat/' . $session->id . '/message";', $html);
         $this->assertStringContainsString('const streamUrl = "/chat/' . $session->id . '/stream";', $html);
+
+        // Verify live thinkingTimer placeholder exists inside typingIndicator
+        $this->assertStringContainsString('id="thinkingTimer"', $html);
     }
 
     public function test_mcp_tool_results_are_hidden_from_user_in_chat_view_only_llm_reply_visible()
@@ -325,5 +328,27 @@ class ChatTest extends TestCase
         // Verify functionResponse name matches the tool name and response is an object
         $this->assertEquals('internal_company_directory', $contents[2]['parts'][0]['functionResponse']['name']);
         $this->assertIsObject($contents[2]['parts'][0]['functionResponse']['response']);
+    }
+
+    public function test_user_can_stream_chat_response_via_sse()
+    {
+        $user = User::where('role', User::ROLE_REGULAR)->first();
+        $session = ChatSession::create([
+            'user_id' => $user->id,
+            'title' => 'SSE Streaming Test',
+        ]);
+
+        $response = $this->actingAs($user)->get("/chat/{$session->id}/stream?message=Hello+Streaming+World");
+
+        $response->assertStatus(200);
+        $response->assertHeader('Content-Type', 'text/event-stream; charset=UTF-8');
+        $response->assertHeader('Cache-Control', 'no-cache, private');
+
+        // Verify user message was recorded in the database
+        $this->assertDatabaseHas('chat_messages', [
+            'chat_session_id' => $session->id,
+            'role' => 'user',
+            'content' => 'Hello Streaming World',
+        ]);
     }
 }

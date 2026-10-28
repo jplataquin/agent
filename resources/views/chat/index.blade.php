@@ -939,6 +939,7 @@
                     <div class="message-bubble message-assistant d-flex align-items-center gap-2">
                         <div class="spinner-grow spinner-grow-sm text-primary" role="status"></div>
                         <span class="small text-muted" id="typingText">Thinking &amp; analyzing systems...</span>
+                        <span class="badge bg-secondary-subtle text-secondary rounded-pill font-monospace" id="thinkingTimer" style="font-size: 0.75rem;">0.0s</span>
                     </div>
                 </div>
             </div>
@@ -1676,6 +1677,28 @@
             });
         }
 
+        // Live timer for thinking/analyzing indicator
+        let thinkingTimerInterval = null;
+        let thinkingStartTime = null;
+
+        function startThinkingTimer() {
+            const timerElem = document.getElementById('thinkingTimer');
+            if (timerElem) timerElem.textContent = '0.0s';
+            thinkingStartTime = Date.now();
+            clearInterval(thinkingTimerInterval);
+            thinkingTimerInterval = setInterval(() => {
+                if (timerElem) {
+                    const elapsed = ((Date.now() - thinkingStartTime) / 1000).toFixed(1);
+                    timerElem.textContent = elapsed + 's';
+                }
+            }, 100);
+        }
+
+        function stopThinkingTimer() {
+            clearInterval(thinkingTimerInterval);
+            thinkingTimerInterval = null;
+        }
+
         function submitMessage() {
             const text = input.value.trim();
             if (!text) return;
@@ -1701,94 +1724,132 @@
             messagesContainer.insertBefore(userRow, typingIndicator);
             scrollToBottom();
 
-            // Show typing indicator
+            // Show typing indicator and start thinking timer
             typingIndicator.classList.remove('d-none');
+            startThinkingTimer();
             scrollToBottom();
 
-            // Send via reliable POST request
+            // Connect to real-time Server-Sent Events (SSE) stream
             const newMsgId = 'msg-' + Date.now();
+            let assistantRow = null;
+            let assistantBubble = null;
+            let accumulatedContent = '';
+            let isFirstChunk = true;
 
-            fetch(messageUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': csrfToken,
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify({ message: text })
-            })
-            .then(res => {
-                if (!res.ok) {
-                    return res.json().then(errData => {
-                        throw new Error(errData.message || errData.content || `Server returned HTTP ${res.status}`);
-                    }).catch(() => {
-                        throw new Error(`Server returned HTTP ${res.status}`);
-                    });
-                }
-                return res.json();
-            })
-            .then(data => {
+            const sseUrl = `${streamUrl}?message=${encodeURIComponent(text)}`;
+            const eventSource = new EventSource(sseUrl);
+
+            function finalizeAssistantMessage(replyText, sessionTitle) {
+                stopThinkingTimer();
                 typingIndicator.classList.add('d-none');
                 input.disabled = false;
                 sendBtn.disabled = false;
                 input.focus();
 
-                const aiReply = data.ai_response || {};
-                const replyText = aiReply.content || aiReply.error || 'Response completed.';
+                if (!assistantRow) {
+                    assistantRow = document.createElement('div');
+                    assistantRow.className = 'message-row assistant-row';
+                    assistantBubble = document.createElement('div');
+                    assistantBubble.className = 'message-bubble message-assistant markdown-body';
+                    assistantBubble.id = newMsgId;
+                    assistantRow.appendChild(assistantBubble);
+                    messagesContainer.insertBefore(assistantRow, typingIndicator);
+                }
 
-                const assistantRow = document.createElement('div');
-                assistantRow.className = 'message-row assistant-row';
-                const assistantBubble = document.createElement('div');
-                assistantBubble.className = 'message-bubble message-assistant markdown-body';
-                assistantBubble.id = newMsgId;
-                assistantBubble.setAttribute('data-raw-content', replyText);
-                assistantRow.appendChild(assistantBubble);
-
-                // Add action buttons
-                const actions = document.createElement('div');
-                actions.className = 'message-actions px-2';
-                actions.innerHTML = `
-                    <button class="action-btn" onclick="copyMessageText('${newMsgId}')" title="Copy message">
-                        <i class="bi bi-clipboard"></i> <span>Copy</span>
-                    </button>
-                    <button class="action-btn tts-btn" onclick="toggleSpeakMessage('${newMsgId}', this)" title="Listen to response">
-                        <i class="bi bi-volume-up"></i> <span>Listen</span>
-                    </button>
-                    <button class="action-btn" onclick="regenerateResponse()" title="Regenerate response">
-                        <i class="bi bi-arrow-clockwise"></i> <span>Regenerate</span>
-                    </button>
-                `;
-                assistantRow.appendChild(actions);
-
-                messagesContainer.insertBefore(assistantRow, typingIndicator);
+                if (replyText) {
+                    accumulatedContent = replyText;
+                }
+                assistantBubble.setAttribute('data-raw-content', accumulatedContent || 'Response completed.');
                 renderMarkdown(assistantBubble);
+
+                // Add action buttons if not already present
+                if (!assistantRow.querySelector('.message-actions')) {
+                    const actions = document.createElement('div');
+                    actions.className = 'message-actions px-2';
+                    actions.innerHTML = `
+                        <button class="action-btn" onclick="copyMessageText('${newMsgId}')" title="Copy message">
+                            <i class="bi bi-clipboard"></i> <span>Copy</span>
+                        </button>
+                        <button class="action-btn tts-btn" onclick="toggleSpeakMessage('${newMsgId}', this)" title="Listen to response">
+                            <i class="bi bi-volume-up"></i> <span>Listen</span>
+                        </button>
+                        <button class="action-btn" onclick="regenerateResponse()" title="Regenerate response">
+                            <i class="bi bi-arrow-clockwise"></i> <span>Regenerate</span>
+                        </button>
+                    `;
+                    assistantRow.appendChild(actions);
+                }
+
                 scrollToBottom();
 
                 // Update session title in sidebar and header if updated
-                if (data.session_title) {
+                if (sessionTitle) {
                     const activeNavTitle = document.querySelector('.session-link.active .session-title');
-                    if (activeNavTitle) activeNavTitle.textContent = data.session_title;
+                    if (activeNavTitle) activeNavTitle.textContent = sessionTitle;
                     const activeHeaderTitle = document.getElementById('activeHeaderTitle');
-                    if (activeHeaderTitle) activeHeaderTitle.textContent = data.session_title;
+                    if (activeHeaderTitle) activeHeaderTitle.textContent = sessionTitle;
                 }
-            })
-            .catch(err => {
+            }
+
+            eventSource.onmessage = function (event) {
+                try {
+                    const data = JSON.parse(event.data);
+
+                    if (data.chunk) {
+                        if (isFirstChunk) {
+                            isFirstChunk = false;
+                            stopThinkingTimer();
+                            typingIndicator.classList.add('d-none');
+
+                            assistantRow = document.createElement('div');
+                            assistantRow.className = 'message-row assistant-row';
+                            assistantBubble = document.createElement('div');
+                            assistantBubble.className = 'message-bubble message-assistant markdown-body';
+                            assistantBubble.id = newMsgId;
+                            assistantRow.appendChild(assistantBubble);
+                            messagesContainer.insertBefore(assistantRow, typingIndicator);
+                        }
+
+                        accumulatedContent += data.chunk;
+                        assistantBubble.setAttribute('data-raw-content', accumulatedContent);
+                        renderMarkdown(assistantBubble);
+                        scrollToBottom();
+                    }
+
+                    if (data.done) {
+                        eventSource.close();
+                        const finalResult = data.result || {};
+                        const replyText = accumulatedContent || finalResult.content || finalResult.error || 'Response completed.';
+                        finalizeAssistantMessage(replyText, data.session_title);
+                    }
+                } catch (e) {
+                    // Non-JSON comments or keep-alive pings
+                }
+            };
+
+            eventSource.onerror = function () {
+                eventSource.close();
+                stopThinkingTimer();
                 typingIndicator.classList.add('d-none');
                 input.disabled = false;
                 sendBtn.disabled = false;
                 input.focus();
 
-                window.showToast(err.message || 'Failed to send message. Please try again.', 'danger');
+                if (!accumulatedContent) {
+                    window.showToast('Streaming connection interrupted. Please try again.', 'danger');
 
-                const assistantRow = document.createElement('div');
-                assistantRow.className = 'message-row assistant-row';
-                const assistantBubble = document.createElement('div');
-                assistantBubble.className = 'message-bubble message-assistant text-danger';
-                assistantBubble.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-1"></i> <strong>Error:</strong> ${err.message || 'Failed to send message. Please try again.'}`;
-                assistantRow.appendChild(assistantBubble);
-                messagesContainer.insertBefore(assistantRow, typingIndicator);
-                scrollToBottom();
-            });
+                    const errRow = document.createElement('div');
+                    errRow.className = 'message-row assistant-row';
+                    const errBubble = document.createElement('div');
+                    errBubble.className = 'message-bubble message-assistant text-danger';
+                    errBubble.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-1"></i> <strong>Error:</strong> Streaming connection interrupted or timed out. Please try again.`;
+                    errRow.appendChild(errBubble);
+                    messagesContainer.insertBefore(errRow, typingIndicator);
+                    scrollToBottom();
+                } else {
+                    finalizeAssistantMessage(accumulatedContent, null);
+                }
+            };
         }
 
         // Wire event listeners cleanly to submitMessage to eliminate native navigation aborts

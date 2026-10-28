@@ -268,6 +268,8 @@ class ChatController extends Controller
      */
     public function stream(Request $request, ChatSession $session)
     {
+        @set_time_limit(300);
+
         if ($session->user_id !== Auth::id()) {
             abort(403);
         }
@@ -287,20 +289,43 @@ class ChatController extends Controller
         }
 
         return new StreamedResponse(function () use ($session) {
-            // Disable output buffering
-            if (ob_get_level() > 0) {
-                ob_end_clean();
+            // Disable output buffering only when not in unit tests
+            if (! app()->runningUnitTests() && ob_get_level() > 0) {
+                @ob_end_clean();
             }
 
-            $onChunk = function ($text) {
-                echo 'data: '.json_encode(['chunk' => $text])."\n\n";
-                flush();
+            $flushOutput = function () {
+                if (! app()->runningUnitTests()) {
+                    @flush();
+                }
             };
 
-            $result = $this->aiService->generateResponse($session, $onChunk);
+            // Send immediate stream connection preamble to prevent reverse proxy 504 timeouts
+            echo ": connected\n\n";
+            $flushOutput();
 
-            echo 'data: '.json_encode(['done' => true, 'result' => $result])."\n\n";
-            flush();
+            $onChunk = function ($text) use ($flushOutput) {
+                echo 'data: '.json_encode(['chunk' => $text])."\n\n";
+                $flushOutput();
+            };
+
+            try {
+                $result = $this->aiService->generateResponse($session, $onChunk);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('ChatController stream error: '.$e->getMessage(), ['exception' => $e]);
+                $result = [
+                    'error' => $e->getMessage(),
+                    'content' => '⚠️ Error generating response: '.$e->getMessage(),
+                ];
+                $onChunk($result['content']);
+            }
+
+            echo 'data: '.json_encode([
+                'done' => true,
+                'result' => $result,
+                'session_title' => $session->title,
+            ])."\n\n";
+            $flushOutput();
         }, 200, [
             'Content-Type' => 'text/event-stream',
             'Cache-Control' => 'no-cache',
