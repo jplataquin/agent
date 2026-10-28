@@ -44,23 +44,20 @@
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Model Identifier</label>
-                        <div class="input-group">
-                            <input type="text" name="model" id="modelInput" list="modelList" class="form-control @error('model') is-invalid @enderror" value="{{ old('model', $provider->model) }}" required autocomplete="off">
-                            <button class="btn btn-outline-secondary" type="button" id="fetchModelsBtn" title="Fetch available models from provider API using the entered API key">
+                        <div class="input-group mb-2">
+                            <select id="modelSelect" class="form-select">
+                                <option value="">-- Select a Recommended Model --</option>
+                            </select>
+                            <button class="btn btn-outline-primary" type="button" id="fetchModelsBtn" title="Fetch live models from provider API using the entered API key">
                                 <i class="bi bi-cloud-arrow-down me-1"></i> Fetch Models
                             </button>
                         </div>
-                        <datalist id="modelList"></datalist>
 
-                        <!-- Fetched Models Dropdown -->
-                        <div id="modelSelectWrapper" class="mt-2 d-none">
-                            <label for="modelSelect" class="form-label small fw-semibold text-primary mb-1">
-                                <i class="bi bi-list-check me-1"></i> Available Models (<span id="modelCountBadge">0</span> found):
-                            </label>
-                            <select id="modelSelect" class="form-select form-select-sm">
-                                <option value="">-- Choose a fetched model --</option>
-                            </select>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-body-secondary text-muted">Selected / Custom:</span>
+                            <input type="text" name="model" id="modelInput" list="modelList" class="form-control font-monospace @error('model') is-invalid @enderror" value="{{ old('model', $provider->model) }}" required autocomplete="off">
                         </div>
+                        <datalist id="modelList"></datalist>
 
                         <div id="modelFetchAlert" class="alert py-2 px-3 small mt-2 mb-0 d-none" role="alert"></div>
 
@@ -217,25 +214,105 @@ document.addEventListener('DOMContentLoaded', function() {
             providerAlert.innerHTML = '<i class="bi bi-info-circle me-1"></i> ' + cfg.alert;
             providerAlert.className = 'alert ' + cfg.alertClass + ' py-2 small mb-3';
         }
+
+        populateModelDropdown(val, modelInput.value.trim());
     }
 
     const fetchModelsBtn = document.getElementById('fetchModelsBtn');
     const modelList = document.getElementById('modelList');
-    const modelSelectWrapper = document.getElementById('modelSelectWrapper');
     const modelSelect = document.getElementById('modelSelect');
-    const modelCountBadge = document.getElementById('modelCountBadge');
     const modelFetchAlert = document.getElementById('modelFetchAlert');
 
-    function resetFetchedModels() {
-        if (modelSelectWrapper) modelSelectWrapper.classList.add('d-none');
-        if (modelFetchAlert) modelFetchAlert.classList.add('d-none');
-        if (modelSelect) modelSelect.innerHTML = '<option value="">-- Choose a fetched model --</option>';
-        if (modelList) modelList.innerHTML = '';
+    const modelPresets = {
+        gemini: [
+            { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (Fast & Versatile)' },
+            { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (Advanced Reasoning)' },
+            { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (Next-Gen)' },
+            { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
+        ],
+        openai: [
+            { id: 'gpt-4o', name: 'GPT-4o (Flagship Multimodal)' },
+            { id: 'gpt-4o-mini', name: 'GPT-4o Mini (Fast & Cost-effective)' },
+            { id: 'o1-preview', name: 'o1 Preview (Advanced Reasoning)' },
+            { id: 'o1-mini', name: 'o1 Mini (Fast STEM Reasoning)' },
+            { id: 'gpt-4-turbo', name: 'GPT-4 Turbo' },
+            { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo' },
+        ],
+        anthropic: [
+            { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet (v2 Recommended)' },
+            { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku (Fast & Accurate)' },
+            { id: 'claude-3-opus-20240229', name: 'Claude 3 Opus (Most Powerful)' },
+            { id: 'claude-3-sonnet-20240229', name: 'Claude 3 Sonnet' },
+        ],
+        openrouter: [
+            { id: 'openai/gpt-4o', name: 'OpenAI: GPT-4o' },
+            { id: 'anthropic/claude-3.5-sonnet', name: 'Anthropic: Claude 3.5 Sonnet' },
+            { id: 'google/gemini-flash-1.5', name: 'Google: Gemini Flash 1.5' },
+            { id: 'meta-llama/llama-3.1-70b-instruct', name: 'Meta: Llama 3.1 70B' },
+        ],
+        custom: [
+            { id: 'custom-model', name: 'Custom Gateway Model' }
+        ]
+    };
+
+    let cachedFetchedModels = {};
+
+    function populateModelDropdown(providerType, selectedModelId, fetchedModels = null) {
+        if (!modelSelect) return;
+        modelSelect.innerHTML = '';
+
+        const activeFetched = fetchedModels || cachedFetchedModels[providerType] || null;
+
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = activeFetched && activeFetched.length > 0
+            ? `-- Select from ${activeFetched.length} Live Models --`
+            : '-- Select a Recommended Model --';
+        modelSelect.appendChild(defaultOption);
+
+        if (activeFetched && activeFetched.length > 0) {
+            const liveGroup = document.createElement('optgroup');
+            liveGroup.label = `Live Fetched Models (${activeFetched.length})`;
+            activeFetched.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.id;
+                opt.textContent = m.name;
+                if (m.id === selectedModelId) opt.selected = true;
+                liveGroup.appendChild(opt);
+            });
+            modelSelect.appendChild(liveGroup);
+        }
+
+        const presets = modelPresets[providerType] || [];
+        if (presets.length > 0) {
+            const presetGroup = document.createElement('optgroup');
+            presetGroup.label = activeFetched ? 'Standard Recommended Presets' : 'Recommended Models';
+            presets.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = p.name;
+                if (!activeFetched && p.id === selectedModelId) opt.selected = true;
+                presetGroup.appendChild(opt);
+            });
+            modelSelect.appendChild(presetGroup);
+        }
+
+        // Keep datalist synchronized for input autocomplete
+        if (modelList) {
+            modelList.innerHTML = '';
+            const allModels = (activeFetched || []).concat(presets);
+            allModels.forEach(item => {
+                const opt = document.createElement('option');
+                opt.value = item.id;
+                opt.textContent = item.name;
+                modelList.appendChild(opt);
+            });
+        }
     }
 
     if (providerSelect) {
         providerSelect.addEventListener('change', () => {
-            resetFetchedModels();
+            if (modelFetchAlert) modelFetchAlert.classList.add('d-none');
             updateFields(false);
         });
         updateFields(true);
@@ -294,36 +371,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 const data = await response.json();
 
                 if (data.success && data.models && data.models.length > 0) {
-                    if (modelList) modelList.innerHTML = '';
-                    if (modelSelect) {
-                        modelSelect.innerHTML = `<option value="">-- Select from ${data.models.length} fetched models --</option>`;
-                    }
-
-                    data.models.forEach(m => {
-                        if (modelList) {
-                            const opt = document.createElement('option');
-                            opt.value = m.id;
-                            opt.textContent = m.name;
-                            modelList.appendChild(opt);
-                        }
-
-                        if (modelSelect) {
-                            const selOpt = document.createElement('option');
-                            selOpt.value = m.id;
-                            selOpt.textContent = m.name;
-                            if (m.id === modelInput.value.trim()) {
-                                selOpt.selected = true;
-                            }
-                            modelSelect.appendChild(selOpt);
-                        }
-                    });
-
-                    if (modelCountBadge) modelCountBadge.textContent = data.models.length;
-                    if (modelSelectWrapper) modelSelectWrapper.classList.remove('d-none');
+                    cachedFetchedModels[providerSelect.value] = data.models;
+                    populateModelDropdown(providerSelect.value, modelInput.value.trim(), data.models);
 
                     if (modelFetchAlert) {
                         modelFetchAlert.className = 'alert alert-success py-2 px-3 small mt-2 mb-0';
-                        modelFetchAlert.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> Successfully fetched <strong>${data.models.length}</strong> models. Select one from the dropdown below or edit manually.`;
+                        modelFetchAlert.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> Successfully fetched <strong>${data.models.length}</strong> live models. Select one from the dropdown above or enter custom.`;
                         modelFetchAlert.classList.remove('d-none');
                     }
 

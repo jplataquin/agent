@@ -106,8 +106,8 @@ class LlmProviderFetchModelsTest extends TestCase
         $response = $this->actingAs($admin)->get(route('admin.llm-providers.create'));
         $response->assertStatus(200);
         $response->assertSee('id="fetchModelsBtn"', false);
-        $response->assertSee('id="modelSelectWrapper"', false);
         $response->assertSee('id="modelSelect"', false);
+        $response->assertSee('id="modelInput"', false);
         $response->assertSee('id="modelFetchAlert"', false);
     }
 
@@ -128,8 +128,8 @@ class LlmProviderFetchModelsTest extends TestCase
         $response = $this->actingAs($admin)->get(route('admin.llm-providers.edit', $provider));
         $response->assertStatus(200);
         $response->assertSee('id="fetchModelsBtn"', false);
-        $response->assertSee('id="modelSelectWrapper"', false);
         $response->assertSee('id="modelSelect"', false);
+        $response->assertSee('id="modelInput"', false);
         $response->assertSee('id="modelFetchAlert"', false);
     }
 }
