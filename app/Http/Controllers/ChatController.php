@@ -269,6 +269,7 @@ class ChatController extends Controller
     public function stream(Request $request, ChatSession $session)
     {
         @set_time_limit(300);
+        @ini_set('max_execution_time', '300');
 
         if ($session->user_id !== Auth::id()) {
             abort(403);
@@ -289,20 +290,43 @@ class ChatController extends Controller
         }
 
         return new StreamedResponse(function () use ($session) {
-            // Disable output buffering only when not in unit tests
-            if (! app()->runningUnitTests() && ob_get_level() > 0) {
-                @ob_end_clean();
+            $isTesting = app()->runningUnitTests() || app()->environment('testing') || defined('PHPUNIT_RUNNING');
+
+            // Disable all levels of output buffering and compression only when not in unit tests
+            if (! $isTesting) {
+                @set_time_limit(300);
+                @ini_set('max_execution_time', '300');
+                @ignore_user_abort(false);
+                @ini_set('zlib.output_compression', '0');
+                @ini_set('implicit_flush', '1');
+                if (function_exists('apache_setenv')) {
+                    @apache_setenv('no-gzip', '1');
+                }
+                ob_implicit_flush(true);
+                while (ob_get_level() > 0) {
+                    @ob_end_clean();
+                }
             }
 
-            $flushOutput = function () {
-                if (! app()->runningUnitTests()) {
+            $flushOutput = function () use ($isTesting) {
+                if (! $isTesting) {
+                    if (ob_get_level() > 0) {
+                        @ob_flush();
+                    }
                     @flush();
                 }
             };
 
-            // Send immediate stream connection preamble to prevent reverse proxy 504 timeouts
+            // Send 2KB comment padding to immediately punch through reverse proxy and firewall buffers
+            echo ': '.str_repeat(' ', 2048)."\n\n";
             echo ": connected\n\n";
             $flushOutput();
+
+            $onHeartbeat = function () use ($flushOutput) {
+                echo ": keepalive\n\n";
+                echo 'data: '.json_encode(['keepalive' => true])."\n\n";
+                $flushOutput();
+            };
 
             $onChunk = function ($text) use ($flushOutput) {
                 echo 'data: '.json_encode(['chunk' => $text])."\n\n";
@@ -310,7 +334,7 @@ class ChatController extends Controller
             };
 
             try {
-                $result = $this->aiService->generateResponse($session, $onChunk);
+                $result = $this->aiService->generateResponse($session, $onChunk, $onHeartbeat);
             } catch (\Throwable $e) {
                 \Illuminate\Support\Facades\Log::error('ChatController stream error: '.$e->getMessage(), ['exception' => $e]);
                 $result = [
@@ -327,8 +351,8 @@ class ChatController extends Controller
             ])."\n\n";
             $flushOutput();
         }, 200, [
-            'Content-Type' => 'text/event-stream',
-            'Cache-Control' => 'no-cache',
+            'Content-Type' => 'text/event-stream; charset=UTF-8',
+            'Cache-Control' => 'no-cache, private',
             'Connection' => 'keep-alive',
             'X-Accel-Buffering' => 'no',
         ]);

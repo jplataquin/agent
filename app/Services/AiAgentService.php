@@ -115,9 +115,9 @@ Important Tool Response Guidelines:
 
     /**
      * Send chat request to configured LLM Provider using the appropriate provider adapter.
-     * Supports tool execution loop.
+     * Supports tool execution loop and streaming heartbeats.
      */
-    public function generateResponse(ChatSession $session, ?callable $onChunk = null): array
+    public function generateResponse(ChatSession $session, ?callable $onChunk = null, ?callable $onHeartbeat = null): array
     {
         $provider = LlmProvider::getDefault();
 
@@ -141,12 +141,33 @@ Important Tool Response Guidelines:
         $rawTools = $this->mcpService->getAllActiveTools();
         $adapter = $this->adapterFactory->make($provider);
 
+        $emitContentChunks = function (string $text) use ($onChunk) {
+            if (! $onChunk) {
+                return;
+            }
+
+            $length = mb_strlen($text);
+            if ($length > 80 && ! app()->runningUnitTests()) {
+                $chunkSize = 40;
+                for ($offset = 0; $offset < $length; $offset += $chunkSize) {
+                    $onChunk(mb_substr($text, $offset, $chunkSize));
+                    usleep(6000); // ~6ms micro-pause for smooth progressive streaming
+                }
+            } else {
+                $onChunk($text);
+            }
+        };
+
         while ($maxIterations === null || $currentIteration < $maxIterations) {
             $currentIteration++;
             $messages = $this->buildMessagesPayload($session);
 
             try {
-                $llmResponse = $adapter->send($provider, $systemPrompt, $messages, $rawTools);
+                if ($onHeartbeat) {
+                    $onHeartbeat();
+                }
+
+                $llmResponse = $adapter->send($provider, $systemPrompt, $messages, $rawTools, $onHeartbeat);
 
                 if ($llmResponse->isError()) {
                     $errText = "⚠️ **AI Provider Error:**\n\n{$llmResponse->errorMessage}";
@@ -180,6 +201,10 @@ Important Tool Response Guidelines:
                     ]);
 
                     foreach ($llmResponse->toolCalls as $toolCall) {
+                        if ($onHeartbeat) {
+                            $onHeartbeat();
+                        }
+
                         $funcName = $toolCall['name'] ?? '';
                         $args = $toolCall['arguments'] ?? [];
 
@@ -192,6 +217,10 @@ Important Tool Response Guidelines:
                             'content' => $toolExecution['output'],
                             'tool_call_id' => $toolCall['id'] ?? 'call_'.uniqid(),
                         ]);
+
+                        if ($onHeartbeat) {
+                            $onHeartbeat();
+                        }
                     }
 
                     // If max limit is defined and reached, break loop to force final synthesis
@@ -207,9 +236,7 @@ Important Tool Response Guidelines:
                 $content = $llmResponse->content ?? 'Response completed.';
                 $content = $this->cleanAssistantReply($content);
 
-                if ($onChunk) {
-                    $onChunk($content);
-                }
+                $emitContentChunks($content);
 
                 $savedMsg = ChatMessage::create([
                     'chat_session_id' => $session->id,
@@ -238,7 +265,11 @@ Important Tool Response Guidelines:
         $synthesisPrompt = $systemPrompt."\n\nNotice: Maximum tool execution limit reached. Provide a comprehensive final answer to the user synthesizing all information gathered from the tools above. Do not attempt to call any more tools.";
 
         try {
-            $finalResponse = $adapter->send($provider, $synthesisPrompt, $messages, []);
+            if ($onHeartbeat) {
+                $onHeartbeat();
+            }
+
+            $finalResponse = $adapter->send($provider, $synthesisPrompt, $messages, [], $onHeartbeat);
 
             if (! $finalResponse->isError() && ! empty($finalResponse->content)) {
                 $content = $finalResponse->content;
@@ -252,9 +283,7 @@ Important Tool Response Guidelines:
             $totalPromptTokens += $finalResponse->promptTokens;
             $totalCompletionTokens += $finalResponse->completionTokens;
 
-            if ($onChunk) {
-                $onChunk($content);
-            }
+            $emitContentChunks($content);
 
             $savedMsg = ChatMessage::create([
                 'chat_session_id' => $session->id,

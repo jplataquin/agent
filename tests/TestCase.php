@@ -12,6 +12,9 @@ abstract class TestCase extends BaseTestCase
      */
     public function createApplication()
     {
+        putenv('APP_ENV=testing');
+        $_ENV['APP_ENV'] = 'testing';
+        $_SERVER['APP_ENV'] = 'testing';
         $_ENV['APP_BASE_PATH'] = dirname(__DIR__);
         $_SERVER['APP_BASE_PATH'] = dirname(__DIR__);
 

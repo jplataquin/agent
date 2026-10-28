@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Log;
 
 class AnthropicAdapter implements LlmAdapterInterface
 {
-    public function send(LlmProvider $provider, string $systemPrompt, array $messages, array $mcpTools): LlmResponse
+    public function send(LlmProvider $provider, string $systemPrompt, array $messages, array $mcpTools, ?callable $onHeartbeat = null): LlmResponse
     {
         // Mock fallback for test keys
         if (str_starts_with($provider->api_key, 'sk-mock') || str_starts_with($provider->api_key, 'mock-') || empty($provider->api_key)) {
@@ -118,13 +118,27 @@ class AnthropicAdapter implements LlmAdapterInterface
         $baseUrl = rtrim($provider->base_url ?: 'https://api.anthropic.com', '/');
         $endpoint = $baseUrl.'/v1/messages';
 
+        $lastHeartbeat = microtime(true);
+        $client = Http::withHeaders([
+            'x-api-key' => $provider->api_key,
+            'anthropic-version' => '2023-06-01',
+            'Content-Type' => 'application/json',
+        ])->timeout(300)->connectTimeout(15);
+
+        if ($onHeartbeat) {
+            $client = $client->withOptions([
+                'progress' => function () use (&$lastHeartbeat, $onHeartbeat) {
+                    if ((microtime(true) - $lastHeartbeat) >= 2.0) {
+                        $lastHeartbeat = microtime(true);
+                        $onHeartbeat();
+                    }
+                },
+            ]);
+        }
+
         $startTime = microtime(true);
         try {
-            $response = Http::withHeaders([
-                'x-api-key' => $provider->api_key,
-                'anthropic-version' => '2023-06-01',
-                'Content-Type' => 'application/json',
-            ])->timeout(60)->post($endpoint, $payload);
+            $response = $client->post($endpoint, $payload);
 
             $latencyMs = (int) round((microtime(true) - $startTime) * 1000);
             $statusCode = $response->status();
