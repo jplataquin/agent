@@ -9,6 +9,21 @@
 
     <title>{{ config('app.name', 'Company AI Agent') }}</title>
 
+    <!-- PWA Manifest & Meta Tags -->
+    <link rel="manifest" href="{{ asset('manifest.json') }}">
+    <meta name="theme-color" content="#0d6efd" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="{{ config('app.name', 'AI Agent') }}">
+
+    <!-- PWA Icons & Favicons -->
+    <link rel="icon" type="image/svg+xml" href="{{ asset('icons/icon.svg') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('icons/icon-32x32.png') }}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ asset('icons/icon-16x16.png') }}">
+    <link rel="apple-touch-icon" href="{{ asset('icons/apple-touch-icon.png') }}">
+
     <!-- Immediate Theme Application Script (Prevents flash) -->
     <script>
         (function() {
@@ -117,6 +132,10 @@
                 </a>
 
                 <div class="d-flex align-items-center gap-2 ms-auto d-md-none me-2">
+                    <!-- Mobile PWA Install Button -->
+                    <button class="btn btn-sm btn-outline-primary rounded-circle pwa-install-btn d-none" type="button" title="Install App" aria-label="Install App">
+                        <i class="bi bi-download"></i>
+                    </button>
                     <!-- Mobile Dark Mode Toggle -->
                     <button class="btn btn-sm btn-outline-secondary rounded-circle theme-toggle-btn" type="button" title="Toggle Dark/Light Mode">
                         <i class="bi bi-moon-stars theme-icon"></i>
@@ -164,6 +183,14 @@
 
                     <!-- Right Side Of Navbar -->
                     <ul class="navbar-nav ms-auto align-items-md-center gap-2">
+                        <!-- Desktop PWA Install Button -->
+                        <li class="nav-item d-none" id="pwaInstallNavDesktop">
+                            <button class="btn btn-sm btn-outline-primary rounded-pill px-2 py-1 pwa-install-btn d-flex align-items-center gap-1" type="button" title="Install App">
+                                <i class="bi bi-download"></i>
+                                <span class="small fw-semibold">Install App</span>
+                            </button>
+                        </li>
+
                         <!-- Desktop Dark Mode Switcher -->
                         <li class="nav-item d-none d-md-block">
                             <button class="btn btn-sm btn-outline-secondary rounded-pill px-2 py-1 theme-toggle-btn d-flex align-items-center gap-1" type="button" title="Toggle Dark/Light Mode">
@@ -303,6 +330,172 @@
     <!-- Markdown Parser & Highlight.js -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+    <!-- PWA Install Banner / Toast -->
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1080;">
+        <div id="pwaInstallToast" class="toast border shadow-lg bg-body" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="false">
+            <div class="toast-header border-bottom bg-body-secondary py-2">
+                <img src="{{ asset('icons/icon-96x96.png') }}" class="rounded me-2" width="22" height="22" alt="Logo">
+                <strong class="me-auto text-body">{{ config('app.name', 'Company AI Agent') }}</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close" id="pwaDismissToastBtn"></button>
+            </div>
+            <div class="toast-body p-3">
+                <p class="small text-secondary mb-3">Install this application for desktop launch, seamless offline capability, and instant access.</p>
+                <div class="d-flex gap-2 justify-content-end">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="toast" id="pwaLaterBtn">Later</button>
+                    <button type="button" class="btn btn-sm btn-primary pwa-install-btn px-3">
+                        <i class="bi bi-download me-1"></i> Install
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PWA Offline Notice Toast -->
+    <div class="position-fixed top-0 start-50 translate-middle-x p-3" style="z-index: 1090;">
+        <div id="pwaOfflineToast" class="toast align-items-center text-bg-warning border-0 shadow" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body d-flex align-items-center gap-2">
+                    <i class="bi bi-wifi-off fs-5"></i>
+                    <span>You are currently offline. Cached views remain accessible.</span>
+                </div>
+                <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Service Worker Registration & PWA Install Controller -->
+    <script>
+        (function() {
+            // 1. Service Worker Registration
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                    navigator.serviceWorker.register('{{ route('pwa.sw') }}', { scope: '/' })
+                        .then(function(reg) {
+                            reg.addEventListener('updatefound', function() {
+                                const newWorker = reg.installing;
+                                if (newWorker) {
+                                    newWorker.addEventListener('statechange', function() {
+                                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                            console.log('[PWA] New version installed and ready.');
+                                        }
+                                    });
+                                }
+                            });
+                        })
+                        .catch(function(err) {
+                            console.warn('[PWA] ServiceWorker registration failed: ', err);
+                        });
+                });
+            }
+
+            // 2. Install Prompt Handling
+            let deferredPrompt = null;
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+            const installButtons = document.querySelectorAll('.pwa-install-btn');
+            const desktopNavContainer = document.getElementById('pwaInstallNavDesktop');
+            const toastEl = document.getElementById('pwaInstallToast');
+
+            function showInstallUI() {
+                if (isStandalone) return;
+                installButtons.forEach(btn => btn.classList.remove('d-none'));
+                if (desktopNavContainer) {
+                    desktopNavContainer.classList.remove('d-none');
+                }
+
+                const dismissedTime = localStorage.getItem('pwa_install_dismissed');
+                const now = Date.now();
+                // Avoid bugging users if dismissed within the last 5 days
+                if (!dismissedTime || (now - parseInt(dismissedTime, 10)) > 5 * 24 * 60 * 60 * 1000) {
+                    if (toastEl && window.bootstrap && window.bootstrap.Toast) {
+                        try {
+                            const toast = window.bootstrap.Toast.getOrCreateInstance(toastEl);
+                            setTimeout(() => toast.show(), 2500);
+                        } catch (e) {
+                            console.error('[PWA] Error showing toast:', e);
+                        }
+                    }
+                }
+            }
+
+            function hideInstallUI() {
+                installButtons.forEach(btn => btn.classList.add('d-none'));
+                if (desktopNavContainer) {
+                    desktopNavContainer.classList.add('d-none');
+                }
+                if (toastEl && window.bootstrap && window.bootstrap.Toast) {
+                    try {
+                        const toast = window.bootstrap.Toast.getInstance(toastEl);
+                        if (toast) toast.hide();
+                    } catch (e) {}
+                }
+            }
+
+            window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault();
+                deferredPrompt = e;
+                showInstallUI();
+            });
+
+            document.addEventListener('click', function(e) {
+                const target = e.target.closest('.pwa-install-btn');
+                if (!target) return;
+
+                if (deferredPrompt) {
+                    deferredPrompt.prompt();
+                    deferredPrompt.userChoice.then((choiceResult) => {
+                        if (choiceResult.outcome === 'accepted') {
+                            console.log('[PWA] User accepted installation');
+                        }
+                        deferredPrompt = null;
+                        hideInstallUI();
+                    });
+                } else {
+                    alert('To install this app on your device:\n\n• On iPhone/iPad (Safari): Tap the Share button, then choose "Add to Home Screen".\n• On Android (Chrome): Tap the menu (3 dots) and select "Install app".\n• On Desktop (Chrome/Edge): Click the Install icon in the browser address bar.');
+                }
+            });
+
+            // Dismiss actions
+            const dismissBtns = [
+                document.getElementById('pwaDismissToastBtn'),
+                document.getElementById('pwaLaterBtn')
+            ];
+            dismissBtns.forEach(btn => {
+                if (btn) {
+                    btn.addEventListener('click', () => {
+                        localStorage.setItem('pwa_install_dismissed', Date.now().toString());
+                    });
+                }
+            });
+
+            window.addEventListener('appinstalled', () => {
+                console.log('[PWA] App successfully installed');
+                deferredPrompt = null;
+                hideInstallUI();
+            });
+
+            // Online / Offline Indicators
+            const offlineToastEl = document.getElementById('pwaOfflineToast');
+            window.addEventListener('offline', () => {
+                if (offlineToastEl && window.bootstrap && window.bootstrap.Toast) {
+                    try {
+                        const toast = window.bootstrap.Toast.getOrCreateInstance(offlineToastEl, { delay: 6000 });
+                        toast.show();
+                    } catch (e) {}
+                }
+            });
+
+            window.addEventListener('online', () => {
+                if (offlineToastEl && window.bootstrap && window.bootstrap.Toast) {
+                    try {
+                        const toast = window.bootstrap.Toast.getInstance(offlineToastEl);
+                        if (toast) toast.hide();
+                    } catch (e) {}
+                }
+            });
+        })();
+    </script>
 
     @stack('scripts')
 </body>

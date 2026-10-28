@@ -80,3 +80,44 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('user-chats/{session}/export', [UserChatController::class, 'export'])->name('user-chats.export');
     Route::delete('user-chats/{session}', [UserChatController::class, 'destroy'])->name('user-chats.destroy');
 });
+
+// PWA Service Worker & Manifest Routes
+Route::get('/manifest.json', function () {
+    $path = public_path('manifest.json');
+    abort_unless(file_exists($path), 404);
+
+    return response(file_get_contents($path), 200, [
+        'Content-Type' => 'application/manifest+json; charset=utf-8',
+        'Cache-Control' => 'public, max-age=3600',
+    ]);
+})->name('pwa.manifest');
+
+Route::get('/sw.js', function () {
+    $path = public_path('sw.js');
+    abort_unless(file_exists($path), 404);
+
+    return response(file_get_contents($path), 200, [
+        'Content-Type' => 'application/javascript; charset=utf-8',
+        'Cache-Control' => 'no-cache, no-store, must-revalidate',
+        'Service-Worker-Allowed' => '/',
+    ]);
+})->name('pwa.sw');
+
+Route::get('/offline', function () {
+    $path = public_path('offline.html');
+    abort_unless(file_exists($path), 404);
+
+    return response(file_get_contents($path), 200, [
+        'Content-Type' => 'text/html; charset=utf-8',
+    ]);
+})->name('pwa.offline');
+
+Route::get('/offline.html', function () {
+    $path = public_path('offline.html');
+    abort_unless(file_exists($path), 404);
+
+    return response(file_get_contents($path), 200, [
+        'Content-Type' => 'text/html; charset=utf-8',
+    ]);
+});
+

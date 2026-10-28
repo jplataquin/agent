@@ -1811,6 +1811,11 @@
                 try {
                     const data = JSON.parse(event.data);
 
+                    if (data.keepalive) {
+                        // Keepalive ping: confirms backend is processing and prevents inactivity timeouts
+                        return;
+                    }
+
                     if (data.chunk) {
                         if (isFirstChunk) {
                             isFirstChunk = false;
@@ -1861,7 +1866,12 @@
                     errRow.className = 'message-row assistant-row';
                     const errBubble = document.createElement('div');
                     errBubble.className = 'message-bubble message-assistant text-danger';
-                    errBubble.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-1"></i> <strong>Error:</strong> Streaming connection interrupted or timed out. Please try again.`;
+                    errBubble.innerHTML = `
+                        <div><i class="bi bi-exclamation-triangle-fill me-1"></i> <strong>Error:</strong> Streaming connection interrupted or timed out. Please try again.</div>
+                        <button type="button" class="btn btn-sm btn-outline-danger mt-2 d-inline-flex align-items-center gap-1" onclick="regenerateResponse()">
+                            <i class="bi bi-arrow-clockwise"></i> Retry Generation
+                        </button>
+                    `;
                     errRow.appendChild(errBubble);
                     messagesContainer.insertBefore(errRow, typingIndicator);
                     scrollToBottom();
