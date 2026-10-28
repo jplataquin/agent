@@ -63,6 +63,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('master-prompts/{master_prompt}/set-active', [MasterPromptController::class, 'setActive'])->name('master-prompts.set-active');
 
     // LLM Providers & API Credentials
+    Route::post('llm-providers/fetch-models', [LlmProviderController::class, 'fetchModels'])->name('llm-providers.fetch-models');
     Route::resource('llm-providers', LlmProviderController::class);
     Route::post('llm-providers/{llm_provider}/set-default', [LlmProviderController::class, 'setDefault'])->name('llm-providers.set-default');
     Route::post('llm-providers/{llm_provider}/test', [LlmProviderController::class, 'testConnection'])->name('llm-providers.test');

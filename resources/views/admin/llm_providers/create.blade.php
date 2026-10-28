@@ -38,7 +38,13 @@
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Model Identifier</label>
-                        <input type="text" name="model" id="modelInput" class="form-control @error('model') is-invalid @enderror" placeholder="gemini-1.5-flash" value="{{ old('model', 'gemini-1.5-flash') }}" required>
+                        <div class="input-group">
+                            <input type="text" name="model" id="modelInput" list="modelList" class="form-control @error('model') is-invalid @enderror" placeholder="gemini-1.5-flash" value="{{ old('model', 'gemini-1.5-flash') }}" required autocomplete="off">
+                            <button class="btn btn-outline-secondary" type="button" id="fetchModelsBtn" title="Fetch available models from provider API using the entered API key">
+                                <i class="bi bi-cloud-arrow-down me-1"></i> Fetch Models
+                            </button>
+                        </div>
+                        <datalist id="modelList"></datalist>
                         <div class="form-text small" id="modelHelpText">Recommended: gemini-1.5-flash, gemini-2.0-flash, or gemini-1.5-pro</div>
                         @error('model') <div class="invalid-feedback">{{ $message }}</div> @enderror
                     </div>
@@ -198,6 +204,61 @@ document.addEventListener('DOMContentLoaded', function() {
     if (providerSelect) {
         providerSelect.addEventListener('change', () => updateFields(false));
         updateFields(true);
+    }
+
+    const fetchModelsBtn = document.getElementById('fetchModelsBtn');
+    const modelList = document.getElementById('modelList');
+
+    if (fetchModelsBtn) {
+        fetchModelsBtn.addEventListener('click', async function () {
+            const apiKey = apiKeyInput.value.trim();
+            if (!apiKey) {
+                alert('Please enter an API Secret Key first before fetching available models.');
+                apiKeyInput.focus();
+                return;
+            }
+
+            const originalText = fetchModelsBtn.innerHTML;
+            fetchModelsBtn.disabled = true;
+            fetchModelsBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Fetching...';
+
+            try {
+                const response = await fetch('{{ route("admin.llm-providers.fetch-models") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        provider_type: providerSelect.value,
+                        api_key: apiKey,
+                        base_url: baseUrlInput.value.trim() || null
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success && data.models && data.models.length > 0) {
+                    modelList.innerHTML = '';
+                    data.models.forEach(m => {
+                        const opt = document.createElement('option');
+                        opt.value = m.id;
+                        opt.textContent = m.name;
+                        modelList.appendChild(opt);
+                    });
+                    alert(`Successfully fetched ${data.models.length} models! You can now select one from the dropdown suggestions or type to search.`);
+                    modelInput.focus();
+                } else {
+                    alert('Error: ' + (data.message || 'Could not retrieve models. Please check your API key and base URL.'));
+                }
+            } catch (err) {
+                alert('Network or server error while fetching models: ' + err.message);
+            } finally {
+                fetchModelsBtn.disabled = false;
+                fetchModelsBtn.innerHTML = originalText;
+            }
+        });
     }
 });
 </script>

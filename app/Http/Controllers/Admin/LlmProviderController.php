@@ -306,6 +306,78 @@ class LlmProviderController extends Controller
         return back()->with('success', "Live diagnostic response: \"{$response->content}\" (Tokens: {$response->promptTokens} prompt / {$response->completionTokens} completion)");
     }
 
+    public function fetchModels(Request $request)
+    {
+        $validated = $request->validate([
+            'provider_type' => 'required|in:openai,anthropic,gemini,openrouter,custom',
+            'api_key' => 'required|string',
+            'base_url' => 'nullable|string',
+        ]);
+
+        $providerType = $validated['provider_type'];
+        $apiKey = trim($validated['api_key']);
+        $baseUrl = ! empty($validated['base_url']) ? trim($validated['base_url']) : null;
+
+        try {
+            $models = [];
+
+            if ($providerType === 'openai') {
+                $url = rtrim($baseUrl ?: 'https://api.openai.com', '/') . '/v1/models';
+                $response = Http::withToken($apiKey)->timeout(15)->get($url);
+                if ($response->successful()) {
+                    foreach ($response->json('data', []) as $model) {
+                        $models[] = ['id' => $model['id'], 'name' => $model['id']];
+                    }
+                } else {
+                    throw new \Exception($response->json('error.message', $response->body()));
+                }
+            } elseif ($providerType === 'gemini') {
+                $cleanBase = rtrim($baseUrl ?: 'https://generativelanguage.googleapis.com', '/');
+                $url = $cleanBase . '/v1beta/models?key=' . urlencode($apiKey);
+                $response = Http::timeout(15)->get($url);
+                if ($response->successful()) {
+                    foreach ($response->json('models', []) as $model) {
+                        $name = str_replace('models/', '', $model['name']);
+                        $models[] = ['id' => $name, 'name' => ($model['displayName'] ?? $name) . ' (' . $name . ')'];
+                    }
+                } else {
+                    throw new \Exception($response->json('error.message', $response->body()));
+                }
+            } elseif ($providerType === 'anthropic') {
+                $url = rtrim($baseUrl ?: 'https://api.anthropic.com', '/') . '/v1/models';
+                $response = Http::withHeaders([
+                    'x-api-key' => $apiKey,
+                    'anthropic-version' => '2023-06-01'
+                ])->timeout(15)->get($url);
+                if ($response->successful()) {
+                    foreach ($response->json('data', []) as $model) {
+                        $models[] = ['id' => $model['id'], 'name' => ($model['display_name'] ?? $model['id']) . ' (' . $model['id'] . ')'];
+                    }
+                } else {
+                    throw new \Exception($response->json('error.message', $response->body()));
+                }
+            } elseif ($providerType === 'openrouter') {
+                $url = rtrim($baseUrl ?: 'https://openrouter.ai/api', '/') . '/v1/models';
+                $response = Http::withToken($apiKey)->timeout(15)->get($url);
+                if ($response->successful()) {
+                    foreach ($response->json('data', []) as $model) {
+                        $models[] = ['id' => $model['id'], 'name' => ($model['name'] ?? $model['id']) . ' (' . $model['id'] . ')'];
+                    }
+                } else {
+                    throw new \Exception($response->json('error.message', $response->body()));
+                }
+            } else {
+                return response()->json(['success' => false, 'message' => 'Dynamic model fetching is not supported for custom providers.']);
+            }
+
+            usort($models, fn($a, $b) => strcmp($a['id'], $b['id']));
+
+            return response()->json(['success' => true, 'models' => $models]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => 'Failed to fetch models: ' . $e->getMessage()]);
+        }
+    }
+
     public function destroy(LlmProvider $llmProvider)
     {
         $llmProvider->delete();
