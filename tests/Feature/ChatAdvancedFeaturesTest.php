@@ -153,4 +153,18 @@ class ChatAdvancedFeaturesTest extends TestCase
         $response->assertSee('Auto-read', false);
         $response->assertSee('chat_auto_read_aloud', false);
     }
+
+    public function test_chat_view_renders_mermaid_library_and_renderer()
+    {
+        $user = User::where('role', User::ROLE_REGULAR)->first();
+        $session = ChatSession::create([
+            'user_id' => $user->id,
+            'title' => 'Test Mermaid Chat',
+        ]);
+
+        $response = $this->actingAs($user)->get("/chat/{$session->id}");
+        $response->assertStatus(200);
+        $response->assertSee('mermaid@10/dist/mermaid.min.js', false);
+        $response->assertSee('renderMermaidGraphs', false);
+    }
 }

@@ -1473,6 +1473,45 @@
     // Render all initial assistant messages
     document.querySelectorAll('.message-assistant.markdown-body').forEach(el => renderMarkdown(el));
 
+    // Mermaid Diagram & Graph Renderer
+    window.renderMermaidGraphs = async function(container) {
+        if (!window.mermaid) return;
+        const target = container || document;
+        const codeBlocks = target.querySelectorAll('pre code.language-mermaid');
+
+        for (let i = 0; i < codeBlocks.length; i++) {
+            const block = codeBlocks[i];
+            const pre = block.closest('pre');
+            if (!pre || pre.dataset.mermaidRendered === 'true') continue;
+            pre.dataset.mermaidRendered = 'true';
+
+            const graphCode = block.textContent.trim();
+            if (!graphCode) continue;
+
+            const graphId = 'mermaid-' + Math.random().toString(36).substring(2, 9);
+            try {
+                const { svg } = await mermaid.render(graphId, graphCode);
+                const wrapper = document.createElement('div');
+                wrapper.className = 'mermaid-chart text-center my-3 p-3 bg-body-secondary rounded border overflow-auto';
+                wrapper.innerHTML = svg;
+
+                const outer = pre.closest('.code-block-wrapper') || pre;
+                if (outer.parentNode) {
+                    outer.parentNode.replaceChild(wrapper, outer);
+                }
+            } catch (err) {
+                console.warn('[Mermaid] Graph rendering failed:', err);
+                const errElem = document.getElementById(graphId) || document.getElementById('d' + graphId);
+                if (errElem) errElem.remove();
+            }
+        }
+    };
+
+    // Render initial diagrams on page load
+    if (typeof window.renderMermaidGraphs === 'function') {
+        window.renderMermaidGraphs(document);
+    }
+
     // 2. Message Actions: Copy Message Text
     window.copyMessageText = function(elementId) {
         const el = document.getElementById(elementId);
@@ -1514,9 +1553,9 @@
         const el = document.getElementById(contentId);
         if (!el) return;
 
-        // Clone element to clean text for natural speech (remove code blocks and markdown artifacts)
+        // Clone element to clean text for natural speech (remove code blocks, diagrams, and tables)
         const clone = el.cloneNode(true);
-        clone.querySelectorAll('pre, code, table').forEach(node => node.remove());
+        clone.querySelectorAll('pre, code, table, .mermaid-chart').forEach(node => node.remove());
         let textToRead = clone.innerText.trim();
 
         if (!textToRead) {
@@ -1814,6 +1853,11 @@
                 }
                 assistantBubble.setAttribute('data-raw-content', accumulatedContent || 'Response completed.');
                 renderMarkdown(assistantBubble);
+
+                // Render any Mermaid diagrams upon response completion
+                if (typeof window.renderMermaidGraphs === 'function') {
+                    window.renderMermaidGraphs(assistantBubble);
+                }
 
                 // Add action buttons if not already present
                 if (!assistantRow.querySelector('.message-actions')) {
