@@ -1695,6 +1695,9 @@
                 micBtn.classList.remove('mic-listening');
                 micIcon.className = 'bi bi-mic-fill fs-5';
                 input.placeholder = 'Ask a question or speak into microphone...';
+                if (input.value.trim() !== '') {
+                    submitMessage();
+                }
             }
 
             micBtn.addEventListener('click', function() {
@@ -1759,6 +1762,7 @@
             input.style.height = 'auto';
             input.disabled = true;
             sendBtn.disabled = true;
+            if (micBtn) micBtn.disabled = true;
 
             if (emptyState) emptyState.classList.add('d-none');
 
@@ -1792,6 +1796,7 @@
                 typingIndicator.classList.add('d-none');
                 input.disabled = false;
                 sendBtn.disabled = false;
+                if (micBtn) micBtn.disabled = false;
                 input.focus();
 
                 if (!assistantRow) {
@@ -1899,6 +1904,7 @@
                 typingIndicator.classList.add('d-none');
                 input.disabled = false;
                 sendBtn.disabled = false;
+                if (micBtn) micBtn.disabled = false;
                 input.focus();
 
                 if (!accumulatedContent) {
