@@ -939,7 +939,7 @@
                     <div class="message-bubble message-assistant d-flex align-items-center gap-2">
                         <div class="spinner-grow spinner-grow-sm text-primary" role="status"></div>
                         <span class="small text-muted" id="typingText">Thinking &amp; analyzing systems...</span>
-                        <span class="badge bg-secondary-subtle text-secondary rounded-pill font-monospace" id="thinkingTimer" style="font-size: 0.75rem;">0.0s</span>
+                        <span class="badge bg-secondary-subtle text-secondary rounded-pill font-monospace" id="thinkingTimer" style="font-size: 0.75rem;">0s</span>
                     </div>
                 </div>
             </div>
@@ -1681,17 +1681,27 @@
         let thinkingTimerInterval = null;
         let thinkingStartTime = null;
 
+        function formatDuration(totalSeconds) {
+            const s = Math.floor(totalSeconds);
+            const mins = Math.floor(s / 60);
+            const secs = s % 60;
+            if (mins > 0) {
+                return `${mins}m ${secs}s`;
+            }
+            return `${secs}s`;
+        }
+
         function startThinkingTimer() {
             const timerElem = document.getElementById('thinkingTimer');
-            if (timerElem) timerElem.textContent = '0.0s';
+            if (timerElem) timerElem.textContent = '0s';
             thinkingStartTime = Date.now();
             clearInterval(thinkingTimerInterval);
             thinkingTimerInterval = setInterval(() => {
                 if (timerElem) {
-                    const elapsed = ((Date.now() - thinkingStartTime) / 1000).toFixed(1);
-                    timerElem.textContent = elapsed + 's';
+                    const elapsed = (Date.now() - thinkingStartTime) / 1000;
+                    timerElem.textContent = formatDuration(elapsed);
                 }
-            }, 100);
+            }, 250);
         }
 
         function stopThinkingTimer() {
@@ -1739,7 +1749,7 @@
             const sseUrl = `${streamUrl}?message=${encodeURIComponent(text)}`;
             const eventSource = new EventSource(sseUrl);
 
-            function finalizeAssistantMessage(replyText, sessionTitle) {
+            function finalizeAssistantMessage(replyText, sessionTitle, durationFormatted) {
                 stopThinkingTimer();
                 typingIndicator.classList.add('d-none');
                 input.disabled = false;
@@ -1766,7 +1776,9 @@
                 if (!assistantRow.querySelector('.message-actions')) {
                     const actions = document.createElement('div');
                     actions.className = 'message-actions px-2';
+                    const timeBadge = durationFormatted ? `<span class="text-muted small me-2 d-inline-flex align-items-center" style="font-size: 0.75rem;" title="Response time"><i class="bi bi-clock me-1"></i>${durationFormatted}</span>` : '';
                     actions.innerHTML = `
+                        ${timeBadge}
                         <button class="action-btn" onclick="copyMessageText('${newMsgId}')" title="Copy message">
                             <i class="bi bi-clipboard"></i> <span>Copy</span>
                         </button>
@@ -1818,9 +1830,11 @@
 
                     if (data.done) {
                         eventSource.close();
+                        const durationSeconds = (Date.now() - thinkingStartTime) / 1000;
+                        const durationFormatted = formatDuration(durationSeconds);
                         const finalResult = data.result || {};
                         const replyText = accumulatedContent || finalResult.content || finalResult.error || 'Response completed.';
-                        finalizeAssistantMessage(replyText, data.session_title);
+                        finalizeAssistantMessage(replyText, data.session_title, durationFormatted);
                     }
                 } catch (e) {
                     // Non-JSON comments or keep-alive pings
@@ -1847,7 +1861,8 @@
                     messagesContainer.insertBefore(errRow, typingIndicator);
                     scrollToBottom();
                 } else {
-                    finalizeAssistantMessage(accumulatedContent, null);
+                    const durationSeconds = (Date.now() - thinkingStartTime) / 1000;
+                    finalizeAssistantMessage(accumulatedContent, null, formatDuration(durationSeconds));
                 }
             };
         }
