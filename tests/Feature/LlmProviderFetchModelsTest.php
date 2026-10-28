@@ -96,4 +96,40 @@ class LlmProviderFetchModelsTest extends TestCase
 
         $response->assertStatus(403);
     }
+
+    public function test_admin_create_page_renders_fetch_models_elements(): void
+    {
+        $admin = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+        ]);
+
+        $response = $this->actingAs($admin)->get(route('admin.llm-providers.create'));
+        $response->assertStatus(200);
+        $response->assertSee('id="fetchModelsBtn"', false);
+        $response->assertSee('id="modelSelectWrapper"', false);
+        $response->assertSee('id="modelSelect"', false);
+        $response->assertSee('id="modelFetchAlert"', false);
+    }
+
+    public function test_admin_edit_page_renders_fetch_models_elements(): void
+    {
+        $admin = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+        ]);
+
+        $provider = \App\Models\LlmProvider::create([
+            'name' => 'Test Gemini Provider',
+            'provider_type' => 'gemini',
+            'api_key' => 'fake-key',
+            'model' => 'gemini-1.5-flash',
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($admin)->get(route('admin.llm-providers.edit', $provider));
+        $response->assertStatus(200);
+        $response->assertSee('id="fetchModelsBtn"', false);
+        $response->assertSee('id="modelSelectWrapper"', false);
+        $response->assertSee('id="modelSelect"', false);
+        $response->assertSee('id="modelFetchAlert"', false);
+    }
 }

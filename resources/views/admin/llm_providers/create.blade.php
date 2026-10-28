@@ -45,6 +45,19 @@
                             </button>
                         </div>
                         <datalist id="modelList"></datalist>
+
+                        <!-- Fetched Models Dropdown -->
+                        <div id="modelSelectWrapper" class="mt-2 d-none">
+                            <label for="modelSelect" class="form-label small fw-semibold text-primary mb-1">
+                                <i class="bi bi-list-check me-1"></i> Available Models (<span id="modelCountBadge">0</span> found):
+                            </label>
+                            <select id="modelSelect" class="form-select form-select-sm">
+                                <option value="">-- Choose a fetched model --</option>
+                            </select>
+                        </div>
+
+                        <div id="modelFetchAlert" class="alert py-2 px-3 small mt-2 mb-0 d-none" role="alert"></div>
+
                         <div class="form-text small" id="modelHelpText">Recommended: gemini-1.5-flash, gemini-2.0-flash, or gemini-1.5-pro</div>
                         @error('model') <div class="invalid-feedback">{{ $message }}</div> @enderror
                     </div>
@@ -201,19 +214,54 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    const fetchModelsBtn = document.getElementById('fetchModelsBtn');
+    const modelList = document.getElementById('modelList');
+    const modelSelectWrapper = document.getElementById('modelSelectWrapper');
+    const modelSelect = document.getElementById('modelSelect');
+    const modelCountBadge = document.getElementById('modelCountBadge');
+    const modelFetchAlert = document.getElementById('modelFetchAlert');
+
+    function resetFetchedModels() {
+        if (modelSelectWrapper) modelSelectWrapper.classList.add('d-none');
+        if (modelFetchAlert) modelFetchAlert.classList.add('d-none');
+        if (modelSelect) modelSelect.innerHTML = '<option value="">-- Choose a fetched model --</option>';
+        if (modelList) modelList.innerHTML = '';
+    }
+
     if (providerSelect) {
-        providerSelect.addEventListener('change', () => updateFields(false));
+        providerSelect.addEventListener('change', () => {
+            resetFetchedModels();
+            updateFields(false);
+        });
         updateFields(true);
     }
 
-    const fetchModelsBtn = document.getElementById('fetchModelsBtn');
-    const modelList = document.getElementById('modelList');
+    if (modelSelect && modelInput) {
+        modelSelect.addEventListener('change', function () {
+            if (this.value) {
+                modelInput.value = this.value;
+                modelInput.dispatchEvent(new Event('input'));
+            }
+        });
+
+        modelInput.addEventListener('input', function () {
+            if (modelSelect) {
+                modelSelect.value = this.value;
+            }
+        });
+    }
 
     if (fetchModelsBtn) {
         fetchModelsBtn.addEventListener('click', async function () {
             const apiKey = apiKeyInput.value.trim();
             if (!apiKey) {
-                alert('Please enter an API Secret Key first before fetching available models.');
+                if (modelFetchAlert) {
+                    modelFetchAlert.className = 'alert alert-warning py-2 px-3 small mt-2 mb-0';
+                    modelFetchAlert.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-1"></i> Please enter an API Secret Key first before fetching available models.';
+                    modelFetchAlert.classList.remove('d-none');
+                } else {
+                    alert('Please enter an API Secret Key first before fetching available models.');
+                }
                 apiKeyInput.focus();
                 return;
             }
@@ -221,6 +269,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const originalText = fetchModelsBtn.innerHTML;
             fetchModelsBtn.disabled = true;
             fetchModelsBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Fetching...';
+            if (modelFetchAlert) modelFetchAlert.classList.add('d-none');
 
             try {
                 const response = await fetch('{{ route("admin.llm-providers.fetch-models") }}', {
@@ -240,20 +289,61 @@ document.addEventListener('DOMContentLoaded', function() {
                 const data = await response.json();
 
                 if (data.success && data.models && data.models.length > 0) {
-                    modelList.innerHTML = '';
+                    if (modelList) modelList.innerHTML = '';
+                    if (modelSelect) {
+                        modelSelect.innerHTML = `<option value="">-- Select from ${data.models.length} fetched models --</option>`;
+                    }
+
                     data.models.forEach(m => {
-                        const opt = document.createElement('option');
-                        opt.value = m.id;
-                        opt.textContent = m.name;
-                        modelList.appendChild(opt);
+                        if (modelList) {
+                            const opt = document.createElement('option');
+                            opt.value = m.id;
+                            opt.textContent = m.name;
+                            modelList.appendChild(opt);
+                        }
+
+                        if (modelSelect) {
+                            const selOpt = document.createElement('option');
+                            selOpt.value = m.id;
+                            selOpt.textContent = m.name;
+                            if (m.id === modelInput.value.trim()) {
+                                selOpt.selected = true;
+                            }
+                            modelSelect.appendChild(selOpt);
+                        }
                     });
-                    alert(`Successfully fetched ${data.models.length} models! You can now select one from the dropdown suggestions or type to search.`);
-                    modelInput.focus();
+
+                    if (modelCountBadge) modelCountBadge.textContent = data.models.length;
+                    if (modelSelectWrapper) modelSelectWrapper.classList.remove('d-none');
+
+                    if (modelFetchAlert) {
+                        modelFetchAlert.className = 'alert alert-success py-2 px-3 small mt-2 mb-0';
+                        modelFetchAlert.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> Successfully fetched <strong>${data.models.length}</strong> models. Select one from the dropdown below or edit manually.`;
+                        modelFetchAlert.classList.remove('d-none');
+                    }
+
+                    if (modelSelect) {
+                        modelSelect.focus();
+                    }
                 } else {
-                    alert('Error: ' + (data.message || 'Could not retrieve models. Please check your API key and base URL.'));
+                    const errorMsg = data.message || 'Could not retrieve models. Please check your API key and base URL.';
+                    if (modelFetchAlert) {
+                        modelFetchAlert.className = 'alert alert-danger py-2 px-3 small mt-2 mb-0';
+                        modelFetchAlert.innerHTML = `<i class="bi bi-exclamation-circle-fill me-1"></i> ${errorMsg}`;
+                        modelFetchAlert.classList.remove('d-none');
+                    } else {
+                        alert('Error: ' + errorMsg);
+                    }
                 }
             } catch (err) {
-                alert('Network or server error while fetching models: ' + err.message);
+                const networkMsg = 'Network or server error while fetching models: ' + err.message;
+                if (modelFetchAlert) {
+                    modelFetchAlert.className = 'alert alert-danger py-2 px-3 small mt-2 mb-0';
+                    modelFetchAlert.innerHTML = `<i class="bi bi-exclamation-circle-fill me-1"></i> ${networkMsg}`;
+                    modelFetchAlert.classList.remove('d-none');
+                } else {
+                    alert(networkMsg);
+                }
             } finally {
                 fetchModelsBtn.disabled = false;
                 fetchModelsBtn.innerHTML = originalText;
