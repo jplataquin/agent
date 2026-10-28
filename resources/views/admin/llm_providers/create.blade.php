@@ -58,13 +58,18 @@
                 </div>
 
                 <div class="row mb-3">
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label class="form-label fw-semibold">Temperature (0.0 to 2.0)</label>
                         <input type="number" step="0.05" min="0" max="2" name="temperature" class="form-control" value="{{ old('temperature', 0.70) }}" required>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label class="form-label fw-semibold">Max Completion Tokens</label>
                         <input type="number" name="max_tokens" class="form-control" placeholder="2048" value="{{ old('max_tokens', 2048) }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Max Tool Iterations</label>
+                        <input type="number" min="1" name="max_tool_iterations" class="form-control" placeholder="No limit" value="{{ old('max_tool_iterations') }}">
+                        <div class="form-text small">Leave blank for no limit.</div>
                     </div>
                 </div>
 

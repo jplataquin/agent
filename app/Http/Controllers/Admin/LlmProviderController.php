@@ -33,6 +33,7 @@ class LlmProviderController extends Controller
             'base_url' => 'nullable|url|max:255',
             'temperature' => 'required|numeric|min:0|max:2',
             'max_tokens' => 'nullable|integer|min:1',
+            'max_tool_iterations' => 'nullable|integer|min:1',
             'is_default' => 'sometimes|boolean',
             'is_active' => 'sometimes|boolean',
         ]);
@@ -81,6 +82,7 @@ class LlmProviderController extends Controller
             'base_url' => 'nullable|url|max:255',
             'temperature' => 'required|numeric|min:0|max:2',
             'max_tokens' => 'nullable|integer|min:1',
+            'max_tool_iterations' => 'nullable|integer|min:1',
             'is_default' => 'sometimes|boolean',
             'is_active' => 'sometimes|boolean',
         ]);

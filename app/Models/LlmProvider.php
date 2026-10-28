@@ -17,6 +17,7 @@ class LlmProvider extends Model
         'base_url',
         'temperature',
         'max_tokens',
+        'max_tool_iterations',
         'is_default',
         'is_active',
     ];
@@ -24,6 +25,7 @@ class LlmProvider extends Model
     protected $casts = [
         'temperature' => 'float',
         'max_tokens' => 'integer',
+        'max_tool_iterations' => 'integer',
         'is_default' => 'boolean',
         'is_active' => 'boolean',
     ];

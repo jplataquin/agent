@@ -123,7 +123,11 @@ class AiAgentService
             ];
         }
 
-        $maxIterations = 5; // prevent infinite tool loops
+        // Maximum tool call limit configured by admin; if not defined (null or <= 0), there is no limit.
+        $maxIterations = ($provider->max_tool_iterations !== null && $provider->max_tool_iterations > 0)
+            ? (int) $provider->max_tool_iterations
+            : null;
+
         $currentIteration = 0;
         $totalPromptTokens = 0;
         $totalCompletionTokens = 0;
@@ -132,7 +136,7 @@ class AiAgentService
         $rawTools = $this->mcpService->getAllActiveTools();
         $adapter = $this->adapterFactory->make($provider);
 
-        while ($currentIteration < $maxIterations) {
+        while ($maxIterations === null || $currentIteration < $maxIterations) {
             $currentIteration++;
             $messages = $this->buildMessagesPayload($session);
 
@@ -185,11 +189,16 @@ class AiAgentService
                         ]);
                     }
 
+                    // If max limit is defined and reached, break loop to force final synthesis
+                    if ($maxIterations !== null && $currentIteration >= $maxIterations) {
+                        break;
+                    }
+
                     // Loop again so LLM synthesizes tool execution results into final answer
                     continue;
                 }
 
-                // Final answer produced
+                // Final answer produced naturally by the model
                 $content = $llmResponse->content ?? 'Response completed.';
 
                 if ($onChunk) {
@@ -218,7 +227,60 @@ class AiAgentService
             }
         }
 
-        return ['content' => 'Completed'];
+        // Tool execution limit reached: force final synthesis turn with tools disabled
+        $messages = $this->buildMessagesPayload($session);
+        $synthesisPrompt = $systemPrompt."\n\nNotice: Maximum tool execution limit reached. Provide a comprehensive final answer to the user synthesizing all information gathered from the tools above. Do not attempt to call any more tools.";
+
+        try {
+            $finalResponse = $adapter->send($provider, $synthesisPrompt, $messages, []);
+
+            if (! $finalResponse->isError() && ! empty($finalResponse->content)) {
+                $content = $finalResponse->content;
+            } else {
+                $lastToolMsg = $session->messages()->where('role', ChatMessage::ROLE_TOOL)->latest()->first();
+                $content = $lastToolMsg && ! empty($lastToolMsg->content)
+                    ? "Here is the information retrieved from available systems:\n\n".$lastToolMsg->content
+                    : 'The requested tool operations have finished.';
+            }
+
+            $totalPromptTokens += $finalResponse->promptTokens;
+            $totalCompletionTokens += $finalResponse->completionTokens;
+
+            if ($onChunk) {
+                $onChunk($content);
+            }
+
+            $savedMsg = ChatMessage::create([
+                'chat_session_id' => $session->id,
+                'role' => ChatMessage::ROLE_ASSISTANT,
+                'content' => $content,
+            ]);
+
+            $this->recordUsage($session, $provider, $totalPromptTokens, $totalCompletionTokens);
+
+            return [
+                'content' => $content,
+                'message_id' => $savedMsg->id,
+            ];
+        } catch (\Throwable $e) {
+            Log::error('AiAgentService final synthesis error: '.$e->getMessage());
+
+            $lastToolMsg = $session->messages()->where('role', ChatMessage::ROLE_TOOL)->latest()->first();
+            $fallbackContent = $lastToolMsg && ! empty($lastToolMsg->content)
+                ? "Here is the information retrieved from available systems:\n\n".$lastToolMsg->content
+                : 'The tool operations completed, but an error occurred synthesizing the summary: '.$e->getMessage();
+
+            $savedMsg = ChatMessage::create([
+                'chat_session_id' => $session->id,
+                'role' => ChatMessage::ROLE_ASSISTANT,
+                'content' => $fallbackContent,
+            ]);
+
+            return [
+                'content' => $fallbackContent,
+                'message_id' => $savedMsg->id,
+            ];
+        }
     }
 
     /**

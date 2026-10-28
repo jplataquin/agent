@@ -351,4 +351,78 @@ class ChatTest extends TestCase
             'content' => 'Hello Streaming World',
         ]);
     }
+
+    public function test_agent_forces_final_synthesis_when_tool_iteration_limit_is_reached()
+    {
+        LlmProvider::query()->update(['is_default' => false]);
+        $provider = LlmProvider::create([
+            'name' => 'Limited Iterations Provider',
+            'provider_type' => 'gemini',
+            'api_key' => 'AIzaSyLimitTestingKey',
+            'model' => 'gemini-1.5-flash',
+            'temperature' => 0.7,
+            'max_tool_iterations' => 1, // Only 1 tool iteration allowed
+            'is_default' => true,
+            'is_active' => true,
+        ]);
+
+        $user = User::where('role', User::ROLE_REGULAR)->first();
+        $session = ChatSession::create([
+            'user_id' => $user->id,
+            'title' => 'Limit Test Session',
+        ]);
+
+        Http::fake([
+            'https://generativelanguage.googleapis.com/*' => Http::sequence()
+                // Iteration 1: Model requests a tool call
+                ->push([
+                    'candidates' => [
+                        [
+                            'content' => [
+                                'parts' => [
+                                    [
+                                        'functionCall' => [
+                                            'name' => 'internal_company_directory',
+                                            'args' => ['query' => 'Bob'],
+                                        ],
+                                    ],
+                                ],
+                                'role' => 'model',
+                            ],
+                        ],
+                    ],
+                    'usageMetadata' => ['promptTokenCount' => 30, 'candidatesTokenCount' => 10],
+                ], 200)
+                // Final synthesis round: Tools are disabled, model synthesizes final answer
+                ->push([
+                    'candidates' => [
+                        [
+                            'content' => [
+                                'parts' => [
+                                    ['text' => 'Synthesized Answer: Bob is an Engineering Manager.'],
+                                ],
+                                'role' => 'model',
+                            ],
+                        ],
+                    ],
+                    'usageMetadata' => ['promptTokenCount' => 50, 'candidatesTokenCount' => 15],
+                ], 200),
+        ]);
+
+        $response = $this->actingAs($user)->postJson("/chat/{$session->id}/message", [
+            'message' => 'Find info for Bob',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('success', true);
+        $response->assertJsonPath('ai_response.content', 'Synthesized Answer: Bob is an Engineering Manager.');
+        $this->assertNotEquals('Completed', $response->json('ai_response.content'));
+
+        // Verify the synthesized answer was persisted to chat_messages
+        $this->assertDatabaseHas('chat_messages', [
+            'chat_session_id' => $session->id,
+            'role' => ChatMessage::ROLE_ASSISTANT,
+            'content' => 'Synthesized Answer: Bob is an Engineering Manager.',
+        ]);
+    }
 }
