@@ -704,6 +704,17 @@
             </div>
 
             <div class="d-flex align-items-center gap-2">
+                <!-- Auto-read Responses (TTS) Toggle -->
+                <div class="form-check form-switch d-inline-flex align-items-center gap-1 mb-0 me-1" title="Automatically read new responses aloud">
+                    <input class="form-check-input mt-0" type="checkbox" role="switch" id="autoTtsToggle" style="cursor: pointer;">
+                    <label class="form-check-label small text-muted user-select-none d-none d-sm-inline" for="autoTtsToggle" style="cursor: pointer; font-size: 0.78rem;">
+                        <i class="bi bi-volume-up"></i> Auto-read
+                    </label>
+                    <label class="form-check-label small text-muted user-select-none d-sm-none" for="autoTtsToggle" style="cursor: pointer;" title="Auto-read aloud">
+                        <i class="bi bi-volume-up"></i>
+                    </label>
+                </div>
+
                 @if(Auth::user()->isAdmin())
                     <a href="{{ route('admin.llm-providers.index') }}" class="btn btn-outline-secondary btn-sm rounded-pill d-none d-sm-inline-flex align-items-center gap-1" title="Manage Providers & Logs">
                         <i class="bi bi-gear"></i> <span class="small">Providers</span>
@@ -1207,6 +1218,34 @@
     window.alert = function(msg) {
         window.showToast(msg, 'info');
     };
+
+    // Auto-read Text-to-Speech (TTS) toggle persistence and state handling
+    (function() {
+        const toggle = document.getElementById('autoTtsToggle');
+        if (!toggle) return;
+
+        // Restore saved preference (default to false/off)
+        const savedPref = localStorage.getItem('chat_auto_read_aloud');
+        toggle.checked = (savedPref === '1');
+
+        toggle.addEventListener('change', function() {
+            localStorage.setItem('chat_auto_read_aloud', this.checked ? '1' : '0');
+            if (this.checked) {
+                if (!('speechSynthesis' in window)) {
+                    window.showToast('Text-to-Speech is not supported by your browser.', 'warning');
+                }
+            } else {
+                // Cancel active playback if switched off
+                if ('speechSynthesis' in window && window.speechSynthesis.speaking) {
+                    window.speechSynthesis.cancel();
+                    document.querySelectorAll('.tts-btn.speaking').forEach(function(btn) {
+                        btn.classList.remove('speaking');
+                        btn.innerHTML = '<i class="bi bi-volume-up"></i> <span>Listen</span>';
+                    });
+                }
+            }
+        });
+    })();
 
     // Active session ID tracker
     window.activeChatSessionId = {{ $activeSession ? $activeSession->id : 'null' }};
@@ -1792,6 +1831,15 @@
                 }
 
                 scrollToBottom();
+
+                // Auto-read response via Text-to-Speech if enabled
+                const autoTtsToggle = document.getElementById('autoTtsToggle');
+                if (autoTtsToggle && autoTtsToggle.checked) {
+                    const ttsBtn = assistantRow.querySelector('.tts-btn');
+                    if (ttsBtn && typeof window.toggleSpeakMessage === 'function') {
+                        window.toggleSpeakMessage(newMsgId, ttsBtn);
+                    }
+                }
 
                 // Update session title in sidebar and header if updated
                 if (sessionTitle) {

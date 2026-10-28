@@ -15,6 +15,9 @@ class ChatAdvancedFeaturesTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config(['view.paths' => [dirname(__DIR__, 2) . '/resources/views']]);
+        app()->forgetInstance('view.finder');
+        \Illuminate\Support\Facades\View::clearResolvedInstances();
         $this->seed();
     }
 
@@ -134,5 +137,20 @@ class ChatAdvancedFeaturesTest extends TestCase
         $this->assertDatabaseMissing('chat_messages', [
             'id' => $assistantMsg->id,
         ]);
+    }
+
+    public function test_chat_view_renders_auto_tts_toggle_and_controls()
+    {
+        $user = User::where('role', User::ROLE_REGULAR)->first();
+        $session = ChatSession::create([
+            'user_id' => $user->id,
+            'title' => 'Test TTS Chat',
+        ]);
+
+        $response = $this->actingAs($user)->get("/chat/{$session->id}");
+        $response->assertStatus(200);
+        $response->assertSee('id="autoTtsToggle"', false);
+        $response->assertSee('Auto-read', false);
+        $response->assertSee('chat_auto_read_aloud', false);
     }
 }
