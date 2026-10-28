@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\BuiltInToolController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\LlmProviderController;
 use App\Http\Controllers\Admin\MasterPromptController;
@@ -57,6 +58,10 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::resource('mcp-servers', McpServerController::class);
     Route::post('mcp-servers/{mcp_server}/sync', [McpServerController::class, 'sync'])->name('mcp-servers.sync');
     Route::post('mcp-servers/{mcp_server}/toggle', [McpServerController::class, 'toggle'])->name('mcp-servers.toggle');
+
+    // Built-in MCP Tools Test UI
+    Route::get('built-in-tools', [BuiltInToolController::class, 'index'])->name('built-in-tools.index');
+    Route::post('built-in-tools/test', [BuiltInToolController::class, 'test'])->name('built-in-tools.test');
 
     // Master Prompts Management
     Route::resource('master-prompts', MasterPromptController::class);
