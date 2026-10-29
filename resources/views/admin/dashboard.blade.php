@@ -11,8 +11,8 @@
             <a href="{{ route('admin.mcp-diagnostics.index') }}" class="btn btn-outline-danger btn-sm rounded-pill px-3">
                 <i class="bi bi-heart-pulse me-1"></i> MCP Diagnostics
             </a>
-            <a href="{{ route('admin.built-in-tools.index') }}" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
-                <i class="bi bi-terminal me-1"></i> Test Built-in Tools
+            <a href="{{ route('admin.internal-tools.index') }}" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
+                <i class="bi bi-terminal me-1"></i> Test Internal Tools
             </a>
             <a href="{{ route('chat.index') }}" class="btn btn-outline-primary btn-sm rounded-pill px-3">
                 <i class="bi bi-chat-dots me-1"></i> Open Chat

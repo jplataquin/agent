@@ -62,7 +62,10 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('mcp-servers/{mcp_server}/sync', [McpServerController::class, 'sync'])->name('mcp-servers.sync');
     Route::post('mcp-servers/{mcp_server}/toggle', [McpServerController::class, 'toggle'])->name('mcp-servers.toggle');
 
-    // Built-in MCP Tools Test UI
+    // Native Internal Tools Test UI
+    Route::get('internal-tools', [BuiltInToolController::class, 'index'])->name('internal-tools.index');
+    Route::post('internal-tools/test', [BuiltInToolController::class, 'test'])->name('internal-tools.test');
+    // Backward compatibility aliases
     Route::get('built-in-tools', [BuiltInToolController::class, 'index'])->name('built-in-tools.index');
     Route::post('built-in-tools/test', [BuiltInToolController::class, 'test'])->name('built-in-tools.test');
 

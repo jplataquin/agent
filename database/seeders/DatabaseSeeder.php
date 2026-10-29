@@ -69,19 +69,33 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        // Ready-made Built-in Web & System MCP Server
+        // Ready-made Internal Web & System Tools
         $builtInTools = app(BuiltInToolsService::class)->getToolsDeclaration();
-        McpServer::updateOrCreate(
-            ['name' => 'Built-in Web & System MCP'],
-            [
+        $internalServer = McpServer::where('name', 'Internal Tools (Native)')
+            ->orWhere('name', 'Built-in Web & System MCP')
+            ->first();
+
+        if ($internalServer) {
+            $internalServer->update([
+                'name' => 'Internal Tools (Native)',
                 'endpoint_url' => url('/api/mcp'),
                 'auth_type' => 'bearer',
                 'auth_token' => 'builtin_local_token_xyz',
-                'description' => 'Native built-in MCP server providing live web fetching, web searching, and internal company directory lookup.',
+                'description' => 'Native internal tools providing live web fetching, web searching, and internal company directory lookup.',
                 'tools_cache' => $builtInTools,
                 'is_active' => true,
-            ]
-        );
+            ]);
+        } else {
+            McpServer::create([
+                'name' => 'Internal Tools (Native)',
+                'endpoint_url' => url('/api/mcp'),
+                'auth_type' => 'bearer',
+                'auth_token' => 'builtin_local_token_xyz',
+                'description' => 'Native internal tools providing live web fetching, web searching, and internal company directory lookup.',
+                'tools_cache' => $builtInTools,
+                'is_active' => true,
+            ]);
+        }
 
         // Sample External HTTP MCP Server
         McpServer::firstOrCreate(

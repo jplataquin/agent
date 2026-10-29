@@ -9,10 +9,13 @@ use Illuminate\Support\Facades\Log;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Process;
 
+/**
+ * Service managing native internal tools (web fetch, web search, internal directory lookup, Python script execution).
+ */
 class BuiltInToolsService
 {
     /**
-     * Get the MCP tools declaration for all built-in tools.
+     * Get the tool declarations for all native internal tools.
      */
     public function getToolsDeclaration(): array
     {
@@ -81,7 +84,7 @@ class BuiltInToolsService
     }
 
     /**
-     * Execute a built-in tool.
+     * Execute a native internal tool.
      */
     public function execute(string $name, array $arguments): array
     {

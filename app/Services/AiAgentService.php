@@ -44,7 +44,7 @@ class AiAgentService
             }
         }
 
-        $promptParts[] = "\nWhen relevant, use the available tools connected via MCP to look up live internal data before responding. Never fabricate data from internal systems if a tool is available.
+        $promptParts[] = "\nWhen relevant, use the available internal tools and external MCP tools to look up live data before responding. Never fabricate data from internal systems if a tool is available.
 
 Important Tool Response Guidelines:
 - Tool execution results and tool JSON payloads are strictly for your internal reference.

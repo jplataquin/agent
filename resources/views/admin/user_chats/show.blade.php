@@ -218,7 +218,7 @@
 
                             @if(!empty($msg->tool_calls))
                                 <div class="alert alert-info py-2 px-3 small mb-2">
-                                    <i class="bi bi-tools me-1"></i> Requested MCP Tool Invocation(s):
+                                    <i class="bi bi-tools me-1"></i> Requested Tool Invocation(s) (Internal / MCP):
                                     <ul class="mb-0 ps-3">
                                         @foreach($msg->tool_calls as $tc)
                                             <li>

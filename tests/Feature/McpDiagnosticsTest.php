@@ -56,7 +56,7 @@ class McpDiagnosticsTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('MCP Diagnostics & Health Auditor', false);
-        $response->assertSee('Built-in Web & System MCP', false);
+        $response->assertSee('Internal Tools', false);
         $response->assertSee('Python Execution Sandbox', false);
         $response->assertSee('Playwright Browser MCP Server', false);
     }
@@ -165,6 +165,7 @@ class McpDiagnosticsTest extends TestCase
 
         $this->assertArrayHasKey('summary', $audit);
         $this->assertArrayHasKey('subsystems', $audit);
+        $this->assertArrayHasKey('internal_tools', $audit['subsystems']);
         $this->assertArrayHasKey('builtin_mcp', $audit['subsystems']);
         $this->assertArrayHasKey('python_sandbox', $audit['subsystems']);
         $this->assertArrayHasKey('playwright_browser', $audit['subsystems']);

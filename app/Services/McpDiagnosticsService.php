@@ -15,18 +15,19 @@ class McpDiagnosticsService
     ) {}
 
     /**
-     * Run complete diagnostics audit across all built-in and external MCP servers and dependencies.
+     * Run complete diagnostics audit across all internal tools, external MCP servers, and dependencies.
      */
     public function auditAll(): array
     {
         $system = $this->auditSystemEnvironment();
-        $builtin = $this->auditBuiltinMcp();
+        $internalTools = $this->auditInternalTools();
         $python = $this->auditPythonSandbox();
         $playwright = $this->auditPlaywrightBrowser();
         $servers = $this->auditRegisteredServers();
 
         $subsystems = [
-            'builtin_mcp' => $builtin,
+            'internal_tools' => $internalTools,
+            'builtin_mcp' => $internalTools, // compatibility alias
             'python_sandbox' => $python,
             'playwright_browser' => $playwright,
             'registered_servers' => $servers,
@@ -96,9 +97,9 @@ class McpDiagnosticsService
     }
 
     /**
-     * Audit Native Built-in Web & System MCP Tools.
+     * Audit Native Internal Tools (Web Fetch, Web Search, Directory Lookup, Python Sandbox).
      */
-    public function auditBuiltinMcp(): array
+    public function auditInternalTools(): array
     {
         $checks = [];
         $hasErrors = false;
@@ -142,16 +143,17 @@ class McpDiagnosticsService
         $tools = $this->builtInToolsService->getToolsDeclaration();
         $toolNames = array_column($tools, 'name');
         $checks['tools_declared'] = [
-            'name' => 'Built-in Tools Declaration',
+            'name' => 'Internal Tools Declaration',
             'status' => count($tools) >= 4 ? 'ok' : 'warning',
-            'message' => count($tools).' tools declared: '.implode(', ', $toolNames),
+            'message' => count($tools).' internal tools declared: '.implode(', ', $toolNames),
             'count' => count($tools),
             'tools' => $toolNames,
         ];
 
-        // 5. Database Entry for Built-in MCP Server
+        // 5. Database Entry for Internal Tools
         $dbServer = McpServer::where(function ($q) {
             $q->where('endpoint_url', 'like', '%/api/mcp%')
+                ->orWhere('name', 'like', '%Internal Tools%')
                 ->orWhere('name', 'like', '%Built-in%');
         })->first();
 
@@ -167,13 +169,21 @@ class McpDiagnosticsService
         }
 
         return [
-            'name' => 'Built-in Web & System MCP',
+            'name' => 'Internal Tools (Native Web & System)',
             'endpoint' => url('/api/mcp'),
             'status' => $hasErrors ? 'error' : ($hasWarnings ? 'warning' : 'ok'),
             'checks' => $checks,
             'tools_count' => count($tools),
             'tools' => $tools,
         ];
+    }
+
+    /**
+     * Backward-compatibility alias for auditInternalTools.
+     */
+    public function auditBuiltinMcp(): array
+    {
+        return $this->auditInternalTools();
     }
 
     /**

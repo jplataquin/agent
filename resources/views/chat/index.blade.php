@@ -710,13 +710,17 @@
                         @endif
                     </div>
                     @php
-                        $activeMcpToolsCount = count(app(\App\Services\McpService::class)->getAllActiveTools());
+                        $toolsBreakdown = app(\App\Services\McpService::class)->getActiveToolsBreakdown();
                     @endphp
                     <small class="text-muted d-block" style="font-size: 0.75rem;">
-                        @if($activeMcpToolsCount > 0)
-                            <i class="bi bi-shield-check text-success me-1"></i> {{ $activeMcpToolsCount }} {{ Str::plural('MCP Tool', $activeMcpToolsCount) }} &amp; Voice Connected
+                        @if($toolsBreakdown['external_mcp'] > 0 && $toolsBreakdown['internal'] > 0)
+                            <i class="bi bi-shield-check text-success me-1"></i> {{ $toolsBreakdown['internal'] }} Internal &amp; {{ $toolsBreakdown['external_mcp'] }} MCP {{ Str::plural('Tool', $toolsBreakdown['external_mcp']) }} Connected
+                        @elseif($toolsBreakdown['internal'] > 0)
+                            <i class="bi bi-shield-check text-success me-1"></i> {{ $toolsBreakdown['internal'] }} Internal {{ Str::plural('Tool', $toolsBreakdown['internal']) }} Active &amp; Voice Ready
+                        @elseif($toolsBreakdown['external_mcp'] > 0)
+                            <i class="bi bi-shield-check text-success me-1"></i> {{ $toolsBreakdown['external_mcp'] }} MCP {{ Str::plural('Tool', $toolsBreakdown['external_mcp']) }} Connected
                         @else
-                            <i class="bi bi-shield-exclamation text-warning me-1"></i> 0 MCP Tools Active (Voice Ready)
+                            <i class="bi bi-shield-exclamation text-warning me-1"></i> 0 Tools Active (Voice Ready)
                         @endif
                     </small>
                 </div>
