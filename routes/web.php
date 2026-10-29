@@ -42,6 +42,7 @@ Route::middleware('auth')->prefix('chat')->name('chat.')->group(function () {
     Route::post('/{session}/message', [ChatController::class, 'sendMessage'])->name('message');
     Route::get('/{session}/stream', [ChatController::class, 'stream'])->name('stream');
     Route::post('/{session}/wrap-up', [ChatController::class, 'wrapUp'])->name('wrap-up');
+    Route::post('/{session}/cancel', [ChatController::class, 'cancel'])->name('cancel');
 });
 
 // Admin Console Routes

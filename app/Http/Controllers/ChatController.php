@@ -323,7 +323,10 @@ class ChatController extends Controller
             echo ": connected\n\n";
             $flushOutput();
 
-            $onHeartbeat = function () use ($flushOutput) {
+            $onHeartbeat = function () use ($flushOutput, $session) {
+                if (Cache::get('chat_cancel_'.$session->id)) {
+                    throw new \RuntimeException('Response generation cancelled by user.');
+                }
                 echo ": keepalive\n\n";
                 echo 'data: '.json_encode(['keepalive' => true])."\n\n";
                 $flushOutput();
@@ -373,6 +376,23 @@ class ChatController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Wrap up signal sent successfully.',
+        ]);
+    }
+
+    /**
+     * Cancel the active streaming response and any ongoing LLM/tool actions.
+     */
+    public function cancel(Request $request, ChatSession $session)
+    {
+        if ($session->user_id !== Auth::id()) {
+            abort(403);
+        }
+
+        Cache::put('chat_cancel_'.$session->id, true, now()->addMinutes(5));
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Action cancelled successfully.',
         ]);
     }
 }

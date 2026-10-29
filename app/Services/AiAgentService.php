@@ -161,7 +161,33 @@ Important Tool Response Guidelines:
 
         $forcedWrapUp = false;
 
+        $checkCancellation = function () use ($session, $onChunk) {
+            if (Cache::pull('chat_cancel_'.$session->id)) {
+                $cancelText = '⚠️ *[Response generation cancelled by user]*';
+                if ($onChunk) {
+                    $onChunk($cancelText);
+                }
+                $cancelledMsg = ChatMessage::create([
+                    'chat_session_id' => $session->id,
+                    'role' => ChatMessage::ROLE_ASSISTANT,
+                    'content' => $cancelText,
+                ]);
+
+                return [
+                    'cancelled' => true,
+                    'content' => $cancelText,
+                    'message_id' => $cancelledMsg->id,
+                ];
+            }
+
+            return null;
+        };
+
         while ($maxIterations === null || $currentIteration < $maxIterations) {
+            if ($cancellationResult = $checkCancellation()) {
+                return $cancellationResult;
+            }
+
             // Check if user requested early wrap-up
             if (Cache::pull('chat_wrap_up_'.$session->id)) {
                 $forcedWrapUp = true;
@@ -210,6 +236,10 @@ Important Tool Response Guidelines:
                     ]);
 
                     foreach ($llmResponse->toolCalls as $toolCall) {
+                        if ($cancellationResult = $checkCancellation()) {
+                            return $cancellationResult;
+                        }
+
                         if ($onHeartbeat) {
                             $onHeartbeat();
                         }
@@ -230,6 +260,10 @@ Important Tool Response Guidelines:
                         if ($onHeartbeat) {
                             $onHeartbeat();
                         }
+                    }
+
+                    if ($cancellationResult = $checkCancellation()) {
+                        return $cancellationResult;
                     }
 
                     // Check if wrap-up was requested during tool execution
@@ -273,6 +307,10 @@ Important Tool Response Guidelines:
                     'content' => 'Error generating response: '.$e->getMessage(),
                 ];
             }
+        }
+
+        if ($cancellationResult = $checkCancellation()) {
+            return $cancellationResult;
         }
 
         // Tool execution limit reached or early wrap-up requested: force final synthesis turn with tools disabled
