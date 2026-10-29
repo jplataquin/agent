@@ -128,4 +128,47 @@ class SkillDoctorTest extends TestCase
             'report' => "### Executive Summary\nConfiguration is mostly coherent with minor style differences.",
         ]);
     }
+
+    public function test_doctor_modal_renders_copy_and_open_full_page_buttons()
+    {
+        $admin = User::where('role', User::ROLE_ADMIN)->first();
+
+        $response = $this->actingAs($admin)->get(route('admin.skills.index'));
+
+        $response->assertStatus(200);
+        $response->assertSee('doctorCopyBtn');
+        $response->assertSee('doctorOpenFullBtn');
+        $response->assertSee('Open in New Tab');
+        $response->assertSee('Copy Report');
+    }
+
+    public function test_admin_can_view_doctor_report_full_page_without_navigation()
+    {
+        $admin = User::where('role', User::ROLE_ADMIN)->first();
+        $sampleReport = "### Executive Summary\nSystem is fully coherent and active.\n\n### Identified Issues\nNone.";
+
+        $response = $this->actingAs($admin)->post(route('admin.skills.doctor.report'), [
+            'report' => $sampleReport,
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertSee('System Coherence Doctor Report', false);
+        $response->assertSee(e($sampleReport), false);
+        $response->assertSee('copyReportBtn', false);
+        $response->assertSee('Print / PDF', false);
+
+        // Standalone full page: standard navigation navbar must NOT be rendered
+        $response->assertDontSee('navbar-nav', false);
+    }
+
+    public function test_non_admin_cannot_access_doctor_report_page()
+    {
+        $user = User::where('role', User::ROLE_REGULAR)->first();
+
+        $response = $this->actingAs($user)->post(route('admin.skills.doctor.report'), [
+            'report' => 'Sample report',
+        ]);
+
+        $response->assertStatus(403);
+    }
 }

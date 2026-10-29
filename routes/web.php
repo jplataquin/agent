@@ -61,6 +61,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
     // AI Skills Management
     Route::post('skills/doctor', [SkillController::class, 'doctor'])->name('skills.doctor');
+    Route::match(['get', 'post'], 'skills/doctor/report', [SkillController::class, 'doctorReport'])->name('skills.doctor.report');
     Route::match(['get', 'post'], 'skills/{skill}/preview', [SkillController::class, 'preview'])->name('skills.preview');
     Route::resource('skills', SkillController::class);
     Route::post('skills/{skill}/toggle', [SkillController::class, 'toggle'])->name('skills.toggle');

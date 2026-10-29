@@ -87,11 +87,21 @@
                 <div id="doctorError" class="alert alert-danger d-none" role="alert"></div>
                 <div id="doctorResult" class="d-none"></div>
             </div>
-            <div class="modal-footer border-top">
-                <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill" data-bs-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-primary btn-sm rounded-pill px-3" id="doctorRerunBtn">
-                    <i class="bi bi-arrow-repeat me-1"></i> Re-run Analysis
-                </button>
+            <div class="modal-footer border-top d-flex justify-content-between align-items-center">
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill d-none" id="doctorCopyBtn" title="Copy raw markdown report">
+                        <i class="bi bi-clipboard me-1"></i> Copy Report
+                    </button>
+                    <button type="button" class="btn btn-outline-primary btn-sm rounded-pill d-none" id="doctorOpenFullBtn" title="Open full-page report in a new tab">
+                        <i class="bi bi-box-arrow-up-right me-1"></i> Open in New Tab
+                    </button>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary btn-sm rounded-pill px-3" id="doctorRerunBtn">
+                        <i class="bi bi-arrow-repeat me-1"></i> Re-run Analysis
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -104,12 +114,18 @@ document.addEventListener('DOMContentLoaded', function () {
     const doctorError = document.getElementById('doctorError');
     const doctorResult = document.getElementById('doctorResult');
     const doctorRerunBtn = document.getElementById('doctorRerunBtn');
+    const doctorCopyBtn = document.getElementById('doctorCopyBtn');
+    const doctorOpenFullBtn = document.getElementById('doctorOpenFullBtn');
+    let currentDoctorReport = '';
 
     async function runDoctor() {
         doctorLoading.classList.remove('d-none');
         doctorError.classList.add('d-none');
         doctorResult.classList.add('d-none');
         doctorResult.innerHTML = '';
+        if (doctorCopyBtn) doctorCopyBtn.classList.add('d-none');
+        if (doctorOpenFullBtn) doctorOpenFullBtn.classList.add('d-none');
+        currentDoctorReport = '';
         doctorRerunBtn.disabled = true;
 
         try {
@@ -125,8 +141,11 @@ document.addEventListener('DOMContentLoaded', function () {
             const data = await res.json();
 
             if (res.ok && data.success) {
-                doctorResult.innerHTML = marked.parse(data.report);
+                currentDoctorReport = data.report || '';
+                doctorResult.innerHTML = marked.parse(currentDoctorReport);
                 doctorResult.classList.remove('d-none');
+                if (doctorCopyBtn) doctorCopyBtn.classList.remove('d-none');
+                if (doctorOpenFullBtn) doctorOpenFullBtn.classList.remove('d-none');
                 if (window.renderMath) {
                     window.renderMath(doctorResult);
                 }
@@ -141,6 +160,48 @@ document.addEventListener('DOMContentLoaded', function () {
             doctorLoading.classList.add('d-none');
             doctorRerunBtn.disabled = false;
         }
+    }
+
+    if (doctorCopyBtn) {
+        doctorCopyBtn.addEventListener('click', function () {
+            if (!currentDoctorReport) return;
+            navigator.clipboard.writeText(currentDoctorReport).then(() => {
+                const originalHtml = doctorCopyBtn.innerHTML;
+                doctorCopyBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i> Copied!';
+                doctorCopyBtn.classList.replace('btn-outline-secondary', 'btn-success');
+                setTimeout(() => {
+                    doctorCopyBtn.innerHTML = originalHtml;
+                    doctorCopyBtn.classList.replace('btn-success', 'btn-outline-secondary');
+                }, 2000);
+            }).catch(err => {
+                alert('Failed to copy to clipboard: ' + err.message);
+            });
+        });
+    }
+
+    if (doctorOpenFullBtn) {
+        doctorOpenFullBtn.addEventListener('click', function () {
+            if (!currentDoctorReport) return;
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = "{{ route('admin.skills.doctor.report') }}";
+            form.target = '_blank';
+
+            const csrf = document.createElement('input');
+            csrf.type = 'hidden';
+            csrf.name = '_token';
+            csrf.value = document.querySelector('meta[name="csrf-token"]').content;
+            form.appendChild(csrf);
+
+            const input = document.createElement('textarea');
+            input.name = 'report';
+            input.value = currentDoctorReport;
+            form.appendChild(input);
+
+            document.body.appendChild(form);
+            form.submit();
+            document.body.removeChild(form);
+        });
     }
 
     if (doctorModal) {
