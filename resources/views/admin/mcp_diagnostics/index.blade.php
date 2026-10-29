@@ -322,9 +322,20 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p class="small text-muted">To keep the Playwright Browser MCP server running continuously on your Ubuntu production server, configure a systemd service:</p>
+                <p class="small text-muted">To keep the official Playwright Browser MCP server running continuously on your Ubuntu production server, configure browser dependencies and a systemd service:</p>
 
-                <h6 class="fw-bold small">1. Create service file <code>/etc/systemd/system/agent-browser.service</code>:</h6>
+                <h6 class="fw-bold small">1. Install Chromium & OS System Dependencies:</h6>
+                <pre class="bg-body-secondary p-3 rounded font-monospace small mb-3">
+# Create shared cache directory for www-data
+sudo mkdir -p /var/www/.cache/ms-playwright
+sudo chown -R www-data:www-data /var/www/.cache
+
+# Install Chromium and required Linux system libraries
+cd {{ base_path() }}
+sudo npx playwright install --with-deps chromium
+                </pre>
+
+                <h6 class="fw-bold small">2. Create service file <code>/etc/systemd/system/agent-browser.service</code>:</h6>
                 <pre class="bg-body-secondary p-3 rounded font-monospace small mb-3">
 [Unit]
 Description=Playwright MCP Headless Browser Server
@@ -338,6 +349,7 @@ WorkingDirectory={{ base_path() }}
 Environment=NODE_ENV=production
 Environment=PORT=3030
 Environment=HOST=127.0.0.1
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
 Environment=PLAYWRIGHT_BROWSERS_PATH=/var/www/.cache/ms-playwright
 ExecStart=/usr/local/bin/node {{ base_path('playwright-server/server.js') }}
 Restart=always
@@ -347,14 +359,14 @@ RestartSec=5s
 WantedBy=multi-user.target
                 </pre>
 
-                <h6 class="fw-bold small">2. Enable & start the service:</h6>
+                <h6 class="fw-bold small">3. Enable & start the service:</h6>
                 <pre class="bg-body-secondary p-3 rounded font-monospace small mb-3">
 sudo systemctl daemon-reload
 sudo systemctl enable --now agent-browser.service
 sudo systemctl status agent-browser.service
                 </pre>
 
-                <h6 class="fw-bold small">3. If node or npx is not in <code>/usr/local/bin</code>:</h6>
+                <h6 class="fw-bold small">4. Ensure Node.js and npx are accessible:</h6>
                 <pre class="bg-body-secondary p-3 rounded font-monospace small mb-0">
 sudo ln -sfn $(which node) /usr/local/bin/node
 sudo ln -sfn $(which npm) /usr/local/bin/npm

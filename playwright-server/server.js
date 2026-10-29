@@ -1,5 +1,6 @@
 import express from 'express';
-import { chromium } from 'playwright';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
 const app = express();
 const PORT = process.env.PORT || 3030;
@@ -7,286 +8,140 @@ const HOST = process.env.HOST || '0.0.0.0';
 
 app.use(express.json({ limit: '10mb' }));
 
-// Persistent Browser & Page context
-let browser = null;
-let context = null;
-let page = null;
+let mcpClient = null;
+let mcpTransport = null;
+let toolsCache = [];
+let isConnecting = false;
 
-async function getBrowser() {
-    if (!browser) {
-        browser = await chromium.launch({
-            headless: true,
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-gpu',
-            ],
+/**
+ * Initialize or get active MCP Client connected to official @playwright/mcp via StdioClientTransport.
+ */
+async function getMcpClient() {
+    if (mcpClient) {
+        return mcpClient;
+    }
+
+    if (isConnecting) {
+        while (isConnecting) {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        if (mcpClient) return mcpClient;
+    }
+
+    isConnecting = true;
+    try {
+        const browserType = process.env.PLAYWRIGHT_BROWSER || 'chromium';
+        const args = [
+            'playwright-mcp',
+            '--headless',
+            '--no-sandbox',
+            '--browser', browserType,
+            '--allowed-hosts', '*',
+        ];
+
+        console.log(`[Playwright MCP Bridge] Spawning official @playwright/mcp (${args.join(' ')})...`);
+
+        mcpTransport = new StdioClientTransport({
+            command: 'npx',
+            args: args,
+            env: {
+                ...process.env,
+                PLAYWRIGHT_BROWSERS_PATH: process.env.PLAYWRIGHT_BROWSERS_PATH || undefined,
+            },
         });
-    }
-    return browser;
-}
 
-async function getPage() {
-    const b = await getBrowser();
-    if (!context) {
-        context = await b.newContext({
-            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-            viewport: { width: 1280, height: 800 },
-        });
-    }
-    if (!page || page.isClosed()) {
-        page = await context.newPage();
-    }
-    return page;
-}
+        const client = new Client(
+            {
+                name: 'playwright-http-bridge',
+                version: '2.0.0',
+            },
+            {
+                capabilities: {},
+            }
+        );
 
-async function resetBrowserContext() {
-    if (page && !page.isClosed()) {
-        await page.close().catch(() => {});
-        page = null;
-    }
-    if (context) {
-        await context.close().catch(() => {});
-        context = null;
+        await client.connect(mcpTransport);
+        console.log('[Playwright MCP Bridge] Successfully connected to official @playwright/mcp via stdio.');
+
+        mcpClient = client;
+
+        // Fetch and cache tools
+        try {
+            const listRes = await mcpClient.listTools();
+            toolsCache = listRes.tools || [];
+            console.log(`[Playwright MCP Bridge] Discovered ${toolsCache.length} tools from official server.`);
+        } catch (e) {
+            console.warn('[Playwright MCP Bridge] Failed to pre-fetch tools list:', e.message);
+        }
+
+        mcpTransport.onclose = () => {
+            console.warn('[Playwright MCP Bridge] Underlying stdio transport closed.');
+            mcpClient = null;
+            mcpTransport = null;
+        };
+
+        mcpTransport.onerror = (err) => {
+            console.error('[Playwright MCP Bridge] Stdio transport error:', err);
+        };
+
+        return mcpClient;
+    } finally {
+        isConnecting = false;
     }
 }
 
 /**
- * Extracts a structured snapshot of the current page including:
- * - Title and URL
- * - Key interactive elements (inputs, buttons, select, links) to help LLM formulate selectors
- * - Cleaned visible text
+ * Reset / Restart the MCP Client process.
  */
-async function extractPageSnapshot(activePage, maxLength = 6000) {
-    const title = await activePage.title().catch(() => 'No title');
-    const url = activePage.url();
-
-    const info = await activePage.evaluate(() => {
-        // Find visible interactive elements
-        const elements = [];
-        const isVisible = (el) => {
-            const style = window.getComputedStyle(el);
-            return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0' && el.offsetWidth > 0 && el.offsetHeight > 0;
-        };
-
-        // Inputs & Textareas
-        document.querySelectorAll('input, textarea, select').forEach((el) => {
-            if (!isVisible(el)) return;
-            const tag = el.tagName.toLowerCase();
-            const type = el.getAttribute('type') || 'text';
-            if (type === 'hidden') return;
-            const name = el.getAttribute('name');
-            const id = el.id;
-            const placeholder = el.getAttribute('placeholder');
-            const value = el.value ? String(el.value).substring(0, 50) : '';
-            const ariaLabel = el.getAttribute('aria-label');
-
-            let desc = `<${tag} type="${type}"`;
-            if (id) desc += ` id="${id}"`;
-            if (name) desc += ` name="${name}"`;
-            if (placeholder) desc += ` placeholder="${placeholder}"`;
-            if (ariaLabel) desc += ` aria-label="${ariaLabel}"`;
-            if (value) desc += ` value="${value}"`;
-            desc += '>';
-            elements.push(desc);
-        });
-
-        // Buttons
-        document.querySelectorAll('button, [role="button"], input[type="submit"], input[type="button"]').forEach((el) => {
-            if (!isVisible(el)) return;
-            const text = (el.innerText || el.value || el.getAttribute('aria-label') || '').trim().replace(/\s+/g, ' ').substring(0, 60);
-            const id = el.id ? ` id="${el.id}"` : '';
-            const type = el.getAttribute('type') ? ` type="${el.getAttribute('type')}"` : '';
-            elements.push(`<button${id}${type}>${text}</button>`);
-        });
-
-        // Key prominent links (top 20)
-        let linkCount = 0;
-        document.querySelectorAll('a[href]').forEach((el) => {
-            if (linkCount >= 20 || !isVisible(el)) return;
-            const text = (el.innerText || el.getAttribute('aria-label') || '').trim().replace(/\s+/g, ' ');
-            const href = el.getAttribute('href');
-            if (text && text.length > 1 && !href.startsWith('javascript:')) {
-                elements.push(`<a href="${href}">${text.substring(0, 50)}</a>`);
-                linkCount++;
-            }
-        });
-
-        // Body visible text clean extraction
-        const clone = document.body ? document.body.cloneNode(true) : null;
-        if (!clone) return { elements, text: '' };
-
-        const removeSelectors = ['script', 'style', 'noscript', 'svg', 'iframe'];
-        removeSelectors.forEach((sel) => {
-            clone.querySelectorAll(sel).forEach((node) => node.remove());
-        });
-
-        const rawText = clone.innerText || '';
-        return {
-            elements: elements.slice(0, 35),
-            text: rawText,
-        };
-    }).catch(() => ({ elements: [], text: '' }));
-
-    // Clean text lines
-    const lines = info.text
-        .split('\n')
-        .map((l) => l.trim())
-        .filter((l) => l.length > 0);
-    let cleanedText = lines.join('\n');
-
-    if (cleanedText.length > maxLength) {
-        cleanedText = cleanedText.substring(0, maxLength) + `\n... [Content truncated at ${maxLength} characters]`;
+async function resetMcpClient() {
+    try {
+        if (mcpClient) {
+            try {
+                await mcpClient.callTool({ name: 'browser_close', arguments: {} }).catch(() => {});
+            } catch (_) {}
+            await mcpClient.close().catch(() => {});
+        }
+    } finally {
+        mcpClient = null;
+        mcpTransport = null;
     }
-
-    let result = `Page Title: ${title}\nCurrent URL: ${url}\n`;
-
-    if (info.elements && info.elements.length > 0) {
-        result += `\nInteractive Elements:\n` + info.elements.map((el) => `  - ${el}`).join('\n') + `\n`;
-    }
-
-    result += `\nPage Content:\n${cleanedText}`;
-    return result;
 }
 
-const TOOLS = [
-    {
-        name: 'browser_navigate',
-        description: 'Navigate the headless browser to a specified URL, waiting for page load, and return the page title, URL, interactive elements, and content.',
-        inputSchema: {
-            type: 'object',
-            properties: {
-                url: {
-                    type: 'string',
-                    description: 'The target website URL to navigate to (e.g. https://news.ycombinator.com)',
-                },
-                wait_until: {
-                    type: 'string',
-                    description: 'When to consider navigation succeeded: "load", "domcontentloaded", or "networkidle" (default: "load")',
-                    enum: ['load', 'domcontentloaded', 'networkidle'],
-                },
-                timeout: {
-                    type: 'integer',
-                    description: 'Timeout in milliseconds (default: 30000)',
-                },
-            },
-            required: ['url'],
-        },
+// Backwards-compatible tools definition for reset
+const RESET_TOOL = {
+    name: 'browser_reset',
+    description: 'Reset the browser session, closing all active pages and tabs.',
+    inputSchema: {
+        type: 'object',
+        properties: {},
+        required: [],
     },
-    {
-        name: 'browser_click',
-        description: 'Click an element or button on the page using a CSS selector or Playwright text locator (e.g. "button#submit", "text=Next", "a.nav-link"). Returns updated page snapshot.',
-        inputSchema: {
-            type: 'object',
-            properties: {
-                selector: {
-                    type: 'string',
-                    description: 'CSS selector or text locator of the element to click',
-                },
-                wait_after: {
-                    type: 'integer',
-                    description: 'Milliseconds to wait after click for DOM or network response (default: 1000)',
-                },
-            },
-            required: ['selector'],
-        },
-    },
-    {
-        name: 'browser_type',
-        description: 'Fill or type text into an input field or textarea on the active page.',
-        inputSchema: {
-            type: 'object',
-            properties: {
-                selector: {
-                    type: 'string',
-                    description: 'Selector of the input element (e.g. "input[name=q]", "#search", "textarea")',
-                },
-                text: {
-                    type: 'string',
-                    description: 'The text string to type into the field',
-                },
-                press_enter: {
-                    type: 'boolean',
-                    description: 'Whether to press Enter key immediately after typing (useful for search forms, default: false)',
-                },
-            },
-            required: ['selector', 'text'],
-        },
-    },
-    {
-        name: 'browser_press_key',
-        description: 'Press a keyboard key on the active page (e.g. "Enter", "Tab", "Escape", "ArrowDown", "PageDown").',
-        inputSchema: {
-            type: 'object',
-            properties: {
-                key: {
-                    type: 'string',
-                    description: 'Key name to press (e.g. "Enter", "Escape", "Tab")',
-                },
-            },
-            required: ['key'],
-        },
-    },
-    {
-        name: 'browser_snapshot',
-        description: 'Get a fresh snapshot of the active page including title, URL, visible interactive elements, and content.',
-        inputSchema: {
-            type: 'object',
-            properties: {
-                max_length: {
-                    type: 'integer',
-                    description: 'Maximum characters of body text to return (default: 6000)',
-                },
-            },
-            required: [],
-        },
-    },
-    {
-        name: 'browser_evaluate',
-        description: 'Safely execute a JavaScript expression in the browser page context and return the result as JSON.',
-        inputSchema: {
-            type: 'object',
-            properties: {
-                script: {
-                    type: 'string',
-                    description: 'JavaScript expression or code string to evaluate in page (e.g. "document.title", "window.location.href")',
-                },
-            },
-            required: ['script'],
-        },
-    },
-    {
-        name: 'browser_reset',
-        description: 'Reset the browser session, closing the current page and clearing all cookies and navigation state.',
-        inputSchema: {
-            type: 'object',
-            properties: {},
-            required: [],
-        },
-    },
-];
+};
 
 // Health Check Endpoint
 app.get(['/', '/health'], async (req, res) => {
-    let pageUrl = null;
-    let pageTitle = null;
-    if (page && !page.isClosed()) {
-        pageUrl = page.url();
-        pageTitle = await page.title().catch(() => null);
+    let clientConnected = false;
+    let toolCount = toolsCache.length;
+
+    try {
+        const client = await getMcpClient();
+        clientConnected = Boolean(client);
+        if (toolsCache.length === 0 && client) {
+            const listRes = await client.listTools();
+            toolsCache = listRes.tools || [];
+            toolCount = toolsCache.length;
+        }
+    } catch (e) {
+        clientConnected = false;
     }
 
     res.json({
-        status: 'ok',
+        status: clientConnected ? 'ok' : 'degraded',
         server: 'playwright-mcp-server',
-        version: '1.0.0',
-        browser: {
-            launched: Boolean(browser),
-            active_page: Boolean(page && !page.isClosed()),
-            current_url: pageUrl,
-            current_title: pageTitle,
-        },
-        tools_count: TOOLS.length,
+        version: '2.0.0',
+        engine: 'official @playwright/mcp',
+        connected: clientConnected,
+        tools_count: toolCount + 1, // + browser_reset
     });
 });
 
@@ -301,8 +156,8 @@ app.post(['/', '/mcp', '/rpc', '/api/mcp'], async (req, res) => {
             result: {
                 protocolVersion: '2024-11-05',
                 serverInfo: {
-                    name: 'playwright-browser-server',
-                    version: '1.0.0',
+                    name: 'playwright-official-mcp-bridge',
+                    version: '2.0.0',
                 },
                 capabilities: {
                     tools: {},
@@ -312,13 +167,35 @@ app.post(['/', '/mcp', '/rpc', '/api/mcp'], async (req, res) => {
     }
 
     if (method === 'tools/list') {
-        return res.json({
-            jsonrpc: '2.0',
-            id: id ?? 1,
-            result: {
-                tools: TOOLS,
-            },
-        });
+        try {
+            const client = await getMcpClient();
+            const listRes = await client.listTools();
+            const tools = listRes.tools || [];
+            toolsCache = tools;
+
+            // Merge in browser_reset if not present
+            const allTools = [...tools];
+            if (!allTools.some((t) => t.name === 'browser_reset')) {
+                allTools.push(RESET_TOOL);
+            }
+
+            return res.json({
+                jsonrpc: '2.0',
+                id: id ?? 1,
+                result: {
+                    tools: allTools,
+                },
+            });
+        } catch (err) {
+            return res.status(500).json({
+                jsonrpc: '2.0',
+                id: id ?? 1,
+                error: {
+                    code: -32603,
+                    message: `Failed to list tools: ${err.message}`,
+                },
+            });
+        }
     }
 
     if (method === 'tools/call') {
@@ -326,112 +203,34 @@ app.post(['/', '/mcp', '/rpc', '/api/mcp'], async (req, res) => {
         const args = params?.arguments || {};
 
         try {
-            let outputText = '';
-
-            switch (toolName) {
-                case 'browser_navigate': {
-                    const activePage = await getPage();
-                    const targetUrl = args.url;
-                    const waitUntil = args.wait_until || 'load';
-                    const timeout = Number(args.timeout) || 30000;
-
-                    await activePage.goto(targetUrl, {
-                        waitUntil,
-                        timeout,
-                    });
-
-                    // Wait a short moment for client-side JS rendering if needed
-                    await activePage.waitForTimeout(500);
-                    outputText = await extractPageSnapshot(activePage);
-                    break;
-                }
-
-                case 'browser_click': {
-                    const activePage = await getPage();
-                    const selector = args.selector;
-                    const waitAfter = Number(args.wait_after) || 1000;
-
-                    await activePage.click(selector, { timeout: 10000 });
-                    if (waitAfter > 0) {
-                        await activePage.waitForTimeout(waitAfter);
-                    }
-                    outputText = `Clicked "${selector}".\n\nUpdated Page State:\n` + (await extractPageSnapshot(activePage));
-                    break;
-                }
-
-                case 'browser_type': {
-                    const activePage = await getPage();
-                    const selector = args.selector;
-                    const text = String(args.text ?? '');
-                    const pressEnter = Boolean(args.press_enter);
-
-                    await activePage.fill(selector, text, { timeout: 10000 });
-                    if (pressEnter) {
-                        await activePage.press(selector, 'Enter');
-                        await activePage.waitForTimeout(1000);
-                        outputText = `Typed "${text}" into "${selector}" and pressed Enter.\n\nUpdated Page State:\n` + (await extractPageSnapshot(activePage));
-                    } else {
-                        outputText = `Successfully typed text into "${selector}".`;
-                    }
-                    break;
-                }
-
-                case 'browser_press_key': {
-                    const activePage = await getPage();
-                    const key = args.key;
-                    await activePage.keyboard.press(key);
-                    await activePage.waitForTimeout(800);
-                    outputText = `Pressed key "${key}".\n\nUpdated Page State:\n` + (await extractPageSnapshot(activePage));
-                    break;
-                }
-
-                case 'browser_snapshot': {
-                    const activePage = await getPage();
-                    const maxLen = Number(args.max_length) || 6000;
-                    outputText = await extractPageSnapshot(activePage, maxLen);
-                    break;
-                }
-
-                case 'browser_evaluate': {
-                    const activePage = await getPage();
-                    const script = args.script;
-                    const evalResult = await activePage.evaluate((code) => {
-                        // eslint-disable-next-line no-eval
-                        return window.eval(code);
-                    }, script);
-
-                    const serialized = typeof evalResult === 'object' ? JSON.stringify(evalResult, null, 2) : String(evalResult);
-                    outputText = `Script evaluation result:\n${serialized}`;
-                    break;
-                }
-
-                case 'browser_reset': {
-                    await resetBrowserContext();
-                    outputText = 'Browser context and pages have been reset to a clean state.';
-                    break;
-                }
-
-                default:
-                    return res.status(400).json({
-                        jsonrpc: '2.0',
-                        id: id ?? 1,
-                        error: {
-                            code: -32601,
-                            message: `Unknown tool: ${toolName}`,
-                        },
-                    });
+            if (toolName === 'browser_reset') {
+                await resetMcpClient();
+                return res.json({
+                    jsonrpc: '2.0',
+                    id: id ?? 1,
+                    result: {
+                        content: [
+                            {
+                                type: 'text',
+                                text: 'Browser context and pages have been reset to a clean state.',
+                            },
+                        ],
+                    },
+                });
             }
+
+            const client = await getMcpClient();
+            const result = await client.callTool({
+                name: toolName,
+                arguments: args,
+            });
 
             return res.json({
                 jsonrpc: '2.0',
                 id: id ?? 1,
                 result: {
-                    content: [
-                        {
-                            type: 'text',
-                            text: outputText,
-                        },
-                    ],
+                    content: result.content || [],
+                    isError: Boolean(result.isError),
                 },
             });
         } catch (err) {
@@ -464,9 +263,7 @@ app.post(['/', '/mcp', '/rpc', '/api/mcp'], async (req, res) => {
 // Graceful termination
 const shutdown = async () => {
     try {
-        if (browser) {
-            await browser.close().catch(() => {});
-        }
+        await resetMcpClient();
     } finally {
         process.exit(0);
     }
@@ -476,8 +273,8 @@ process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
 const server = app.listen(PORT, HOST, () => {
-    console.log(`[Playwright MCP] Server listening on http://${HOST}:${PORT}`);
-    console.log(`[Playwright MCP] Endpoint: http://${HOST}:${PORT}/mcp`);
+    console.log(`[Playwright MCP Bridge] Server listening on http://${HOST}:${PORT}`);
+    console.log(`[Playwright MCP Bridge] Endpoint: http://${HOST}:${PORT}/mcp`);
 });
 
 export default app;

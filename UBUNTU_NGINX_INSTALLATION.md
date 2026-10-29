@@ -19,10 +19,11 @@ This guide provides step-by-step instructions for deploying this **Laravel AI Ag
 12. [Step 11: Configure Nginx (with SSE Streaming Support)](#step-11-configure-nginx-with-sse-streaming-support)
 13. [Step 12: Configure Queue Worker (Systemd Service)](#step-12-configure-queue-worker-systemd-service)
 14. [Step 13: Setup Cron Scheduler](#step-13-setup-cron-scheduler)
-15. [Step 14: Secure with SSL (Let's Encrypt / Certbot)](#step-14-secure-with-ssl-lets-encrypt--certbot)
-16. [Step 15: Firewall Setup (UFW)](#step-15-firewall-setup-ufw)
-17. [Step 16: Production Cache Optimization](#step-16-production-cache-optimization)
-18. [Troubleshooting & Maintenance](#troubleshooting--maintenance)
+15. [Step 14: Setup Playwright Headless Browser MCP Server](#step-14-setup-playwright-headless-browser-mcp-server)
+16. [Step 15: Secure with SSL (Let's Encrypt / Certbot)](#step-15-secure-with-ssl-lets-encrypt--certbot)
+17. [Step 16: Firewall Setup (UFW)](#step-16-firewall-setup-ufw)
+18. [Step 17: Production Cache Optimization](#step-17-production-cache-optimization)
+19. [Troubleshooting & Maintenance](#troubleshooting--maintenance)
 
 ---
 
@@ -491,7 +492,84 @@ Add the following line at the bottom:
 
 ---
 
-## Step 14: Secure with SSL (Let's Encrypt / Certbot)
+## Step 14: Setup Playwright Headless Browser MCP Server
+
+The platform includes full interactive headless web browsing powered by the official Microsoft `@playwright/mcp` library. It enables the AI agent to navigate pages, inspect elements via accessibility trees, type into forms, click buttons, and capture page states.
+
+### 1. Install Chromium & OS Dependencies
+Headless Chromium requires several underlying Linux GUI and font libraries on Ubuntu:
+
+```bash
+cd /var/www/agent
+
+# Ensure the shared cache directory exists and is owned by www-data
+sudo mkdir -p /var/www/.cache/ms-playwright
+sudo chown -R www-data:www-data /var/www/.cache
+
+# Download Chromium binary and automatically install required Ubuntu system libraries
+sudo npx playwright install --with-deps chromium
+```
+
+### 2. Configure Systemd Service (`agent-browser.service`)
+Configure a dedicated background service to keep the Playwright MCP HTTP bridge running:
+
+1. Create the systemd service file:
+
+```bash
+sudo nano /etc/systemd/system/agent-browser.service
+```
+
+2. Add the following service definition:
+
+```ini
+[Unit]
+Description=Playwright MCP Headless Browser Server
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/agent
+Environment=NODE_ENV=production
+Environment=PORT=3030
+Environment=HOST=127.0.0.1
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=PLAYWRIGHT_BROWSERS_PATH=/var/www/.cache/ms-playwright
+ExecStart=/usr/local/bin/node /var/www/agent/playwright-server/server.js
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
+```
+
+3. Ensure Node.js and npx are accessible in `/usr/local/bin`:
+
+```bash
+sudo ln -sfn $(which node) /usr/local/bin/node
+sudo ln -sfn $(which npm) /usr/local/bin/npm
+sudo ln -sfn $(which npx) /usr/local/bin/npx
+```
+
+4. Enable and start the service:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now agent-browser.service
+sudo systemctl status agent-browser.service --no-pager
+```
+
+5. Register the Playwright MCP Server in Laravel:
+
+```bash
+cd /var/www/agent
+php artisan mcp:register-playwright --sync
+```
+
+---
+
+## Step 15: Secure with SSL (Let's Encrypt / Certbot)
 
 Install Certbot for Nginx to obtain a free SSL certificate:
 
@@ -515,7 +593,7 @@ sudo certbot renew --dry-run
 
 ---
 
-## Step 15: Firewall Setup (UFW)
+## Step 16: Firewall Setup (UFW)
 
 Secure the server using Ubuntu's Uncomplicated Firewall (UFW):
 
@@ -533,7 +611,7 @@ sudo ufw status
 
 ---
 
-## Step 16: Production Cache Optimization
+## Step 17: Production Cache Optimization
 
 Once everything is installed and verified, cache the Laravel framework bootstrap files for maximum performance:
 
@@ -627,6 +705,7 @@ php artisan view:cache
 
 # Restart background workers
 sudo systemctl restart agent-worker.service
+sudo systemctl restart agent-browser.service
 sudo systemctl restart php8.3-fpm
 ```
 
