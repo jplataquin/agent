@@ -32,13 +32,13 @@ class McpDiagnosticsTest extends TestCase
 
     public function test_guest_cannot_access_diagnostics(): void
     {
-        $response = $this->get(route('admin.mcp-diagnostics.index'));
+        $response = $this->get(route('admin.all-tools-diagnostic.index'));
         $response->assertRedirect(route('login'));
     }
 
     public function test_regular_user_cannot_access_diagnostics(): void
     {
-        $response = $this->actingAs($this->user)->get(route('admin.mcp-diagnostics.index'));
+        $response = $this->actingAs($this->user)->get(route('admin.all-tools-diagnostic.index'));
         $response->assertForbidden();
     }
 
@@ -52,13 +52,29 @@ class McpDiagnosticsTest extends TestCase
             ], 200),
         ]);
 
-        $response = $this->actingAs($this->admin)->get(route('admin.mcp-diagnostics.index'));
+        $response = $this->actingAs($this->admin)->get(route('admin.all-tools-diagnostic.index'));
 
         $response->assertOk();
-        $response->assertSee('MCP Diagnostics & Health Auditor', false);
+        $response->assertSee('All Tools Diagnostic', false);
         $response->assertSee('Internal Tools', false);
         $response->assertSee('Python Execution Sandbox', false);
         $response->assertSee('Playwright Browser MCP Server', false);
+    }
+
+    public function test_backward_compatibility_mcp_diagnostics_route_works(): void
+    {
+        $response = $this->actingAs($this->admin)->get(route('admin.mcp-diagnostics.index'));
+        $response->assertOk();
+        $response->assertSee('All Tools Diagnostic', false);
+    }
+
+    public function test_top_level_all_tools_diagnostic_url_redirects_to_admin(): void
+    {
+        $response = $this->actingAs($this->admin)->get('/all-tools-diagnostic');
+        $response->assertRedirect(route('admin.all-tools-diagnostic.index'));
+
+        $legacyResponse = $this->actingAs($this->admin)->get('/mcp-diagnostics');
+        $legacyResponse->assertRedirect(route('admin.all-tools-diagnostic.index'));
     }
 
     public function test_admin_can_run_diagnostics_via_ajax(): void
@@ -71,7 +87,7 @@ class McpDiagnosticsTest extends TestCase
             ], 200),
         ]);
 
-        $response = $this->actingAs($this->admin)->postJson(route('admin.mcp-diagnostics.run'));
+        $response = $this->actingAs($this->admin)->postJson(route('admin.all-tools-diagnostic.run'));
 
         $response->assertOk();
         $response->assertJsonStructure([
@@ -142,7 +158,7 @@ class McpDiagnosticsTest extends TestCase
             ], 200),
         ]);
 
-        $response = $this->actingAs($this->admin)->postJson(route('admin.mcp-diagnostics.action'), [
+        $response = $this->actingAs($this->admin)->postJson(route('admin.all-tools-diagnostic.action'), [
             'action' => 'sync_server',
             'server_id' => $server->id,
         ]);

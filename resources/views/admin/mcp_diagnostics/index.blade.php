@@ -8,10 +8,10 @@
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb mb-1 small">
                     <li class="breadcrumb-item"><a href="{{ route('admin.dashboard') }}">Admin</a></li>
-                    <li class="breadcrumb-item active" aria-current="page">MCP Diagnostics</li>
+                    <li class="breadcrumb-item active" aria-current="page">All Tools Diagnostic</li>
                 </ol>
             </nav>
-            <h3 class="fw-bold mb-1"><i class="bi bi-heart-pulse text-danger me-2"></i>MCP Diagnostics & Health Auditor</h3>
+            <h3 class="fw-bold mb-1"><i class="bi bi-heart-pulse text-danger me-2"></i>All Tools Diagnostic</h3>
             <p class="text-muted small mb-0">Automated health inspection, runtime version verification, and dependency auditing for internal tools and external MCP servers.</p>
         </div>
         <div class="d-flex gap-2 align-items-center">
@@ -391,7 +391,7 @@ document.addEventListener('DOMContentLoaded', function () {
         refreshIcon.classList.add('d-none');
 
         try {
-            const res = await fetch("{{ route('admin.mcp-diagnostics.run') }}", {
+            const res = await fetch("{{ route('admin.all-tools-diagnostic.run') }}", {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -428,7 +428,7 @@ document.addEventListener('DOMContentLoaded', function () {
             this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Registering...';
 
             try {
-                const res = await fetch("{{ route('admin.mcp-diagnostics.action') }}", {
+                const res = await fetch("{{ route('admin.all-tools-diagnostic.action') }}", {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -463,7 +463,7 @@ document.addEventListener('DOMContentLoaded', function () {
             this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
 
             try {
-                const res = await fetch("{{ route('admin.mcp-diagnostics.action') }}", {
+                const res = await fetch("{{ route('admin.all-tools-diagnostic.action') }}", {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

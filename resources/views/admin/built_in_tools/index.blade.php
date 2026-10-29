@@ -15,8 +15,8 @@
             <p class="text-muted small mb-0">Manually invoke and inspect native internal tools like <code>web_fetch</code>, <code>web_search</code>, or custom scripts.</p>
         </div>
         <div class="d-flex gap-2">
-            <a href="{{ route('admin.mcp-diagnostics.index') }}" class="btn btn-outline-danger btn-sm rounded-pill px-3">
-                <i class="bi bi-heart-pulse me-1"></i> Subsystem Diagnostics
+            <a href="{{ route('admin.all-tools-diagnostic.index') }}" class="btn btn-outline-danger btn-sm rounded-pill px-3">
+                <i class="bi bi-heart-pulse me-1"></i> All Tools Diagnostic
             </a>
             <a href="{{ route('admin.dashboard') }}" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
                 <i class="bi bi-arrow-left me-1"></i> Dashboard

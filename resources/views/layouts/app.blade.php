@@ -175,7 +175,7 @@
                                         <li><a class="dropdown-item" href="{{ route('admin.skills.index') }}"><i class="bi bi-tools me-2"></i>AI Skills</a></li>
                                         <li><a class="dropdown-item" href="{{ route('admin.mcp-servers.index') }}"><i class="bi bi-hdd-network me-2"></i>HTTP MCP Servers</a></li>
                                         <li><a class="dropdown-item" href="{{ route('admin.internal-tools.index') }}"><i class="bi bi-terminal me-2"></i>Internal Tools</a></li>
-                                        <li><a class="dropdown-item" href="{{ route('admin.mcp-diagnostics.index') }}"><i class="bi bi-heart-pulse text-danger me-2"></i>MCP Diagnostics & Health</a></li>
+                                        <li><a class="dropdown-item" href="{{ route('admin.all-tools-diagnostic.index') }}"><i class="bi bi-heart-pulse text-danger me-2"></i>All Tools Diagnostic</a></li>
                                         <li><a class="dropdown-item" href="{{ route('admin.master-prompts.index') }}"><i class="bi bi-file-text me-2"></i>Master Prompts</a></li>
                                         <li><a class="dropdown-item" href="{{ route('admin.llm-providers.index') }}"><i class="bi bi-key me-2"></i>LLM Providers & Keys</a></li>
                                         <li><hr class="dropdown-divider"></li>

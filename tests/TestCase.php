@@ -12,13 +12,16 @@ abstract class TestCase extends BaseTestCase
      */
     public function createApplication()
     {
+        $base = file_exists(getcwd().'/bootstrap/app.php') ? getcwd() : dirname(__DIR__);
+
         putenv('APP_ENV=testing');
         $_ENV['APP_ENV'] = 'testing';
         $_SERVER['APP_ENV'] = 'testing';
-        $_ENV['APP_BASE_PATH'] = dirname(__DIR__);
-        $_SERVER['APP_BASE_PATH'] = dirname(__DIR__);
+        $_ENV['APP_BASE_PATH'] = $base;
+        $_SERVER['APP_BASE_PATH'] = $base;
+        putenv("APP_BASE_PATH={$base}");
 
-        $app = require dirname(__DIR__).'/bootstrap/app.php';
+        $app = require $base.'/bootstrap/app.php';
 
         $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 

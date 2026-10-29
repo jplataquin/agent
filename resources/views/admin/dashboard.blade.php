@@ -8,8 +8,8 @@
             <p class="text-muted small mb-0">Manage users, AI skills, HTTP MCP servers, system prompts, and monitor LLM token usage.</p>
         </div>
         <div class="d-flex gap-2">
-            <a href="{{ route('admin.mcp-diagnostics.index') }}" class="btn btn-outline-danger btn-sm rounded-pill px-3">
-                <i class="bi bi-heart-pulse me-1"></i> MCP Diagnostics
+            <a href="{{ route('admin.all-tools-diagnostic.index') }}" class="btn btn-outline-danger btn-sm rounded-pill px-3">
+                <i class="bi bi-heart-pulse me-1"></i> All Tools Diagnostic
             </a>
             <a href="{{ route('admin.internal-tools.index') }}" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
                 <i class="bi bi-terminal me-1"></i> Test Internal Tools

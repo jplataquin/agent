@@ -28,6 +28,12 @@ Route::get('/home', function () {
     return redirect()->route('chat.index');
 })->name('home');
 
+Route::middleware(['auth', 'admin'])->group(function () {
+    Route::get('/all-tools-diagnostic', fn () => redirect()->route('admin.all-tools-diagnostic.index'));
+    Route::get('/all-tools-diagnostics', fn () => redirect()->route('admin.all-tools-diagnostic.index'));
+    Route::get('/mcp-diagnostics', fn () => redirect()->route('admin.all-tools-diagnostic.index'));
+});
+
 // Authenticated User Chat Routes
 Route::middleware('auth')->prefix('chat')->name('chat.')->group(function () {
     Route::get('/', [ChatController::class, 'index'])->name('index');
@@ -69,7 +75,12 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('built-in-tools', [BuiltInToolController::class, 'index'])->name('built-in-tools.index');
     Route::post('built-in-tools/test', [BuiltInToolController::class, 'test'])->name('built-in-tools.test');
 
-    // MCP Diagnostics & Subsystem Health Audit
+    // All Tools Diagnostic & Subsystem Health Audit
+    Route::get('all-tools-diagnostic', [McpDiagnosticsController::class, 'index'])->name('all-tools-diagnostic.index');
+    Route::get('all-tools-diagnostics', [McpDiagnosticsController::class, 'index'])->name('all-tools-diagnostics.index');
+    Route::post('all-tools-diagnostic/run', [McpDiagnosticsController::class, 'runDiagnostics'])->name('all-tools-diagnostic.run');
+    Route::post('all-tools-diagnostic/action', [McpDiagnosticsController::class, 'quickAction'])->name('all-tools-diagnostic.action');
+    // Backward compatibility aliases
     Route::get('mcp-diagnostics', [McpDiagnosticsController::class, 'index'])->name('mcp-diagnostics.index');
     Route::post('mcp-diagnostics/run', [McpDiagnosticsController::class, 'runDiagnostics'])->name('mcp-diagnostics.run');
     Route::post('mcp-diagnostics/action', [McpDiagnosticsController::class, 'quickAction'])->name('mcp-diagnostics.action');
