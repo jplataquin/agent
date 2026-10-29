@@ -60,6 +60,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::resource('users', UserController::class);
 
     // AI Skills Management
+    Route::post('skills/doctor', [SkillController::class, 'doctor'])->name('skills.doctor');
     Route::resource('skills', SkillController::class);
     Route::post('skills/{skill}/toggle', [SkillController::class, 'toggle'])->name('skills.toggle');
 
