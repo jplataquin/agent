@@ -11,6 +11,15 @@ class LlmProviderFetchModelsTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config(['view.paths' => [dirname(__DIR__, 2) . '/resources/views']]);
+        app()->forgetInstance('view.finder');
+        \Illuminate\Support\Facades\View::clearResolvedInstances();
+    }
+
     public function test_admin_can_fetch_gemini_models_via_api(): void
     {
         $admin = User::factory()->create([
@@ -131,5 +140,55 @@ class LlmProviderFetchModelsTest extends TestCase
         $response->assertSee('id="modelSelect"', false);
         $response->assertSee('id="modelInput"', false);
         $response->assertSee('id="modelFetchAlert"', false);
+    }
+
+    public function test_admin_edit_page_renders_two_column_runtime_parameters(): void
+    {
+        $admin = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+        ]);
+
+        $provider = \App\Models\LlmProvider::create([
+            'name' => 'Test Gemini Provider',
+            'provider_type' => 'gemini',
+            'api_key' => 'fake-key',
+            'model' => 'gemini-1.5-flash',
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($admin)->get(route('admin.llm-providers.edit', $provider));
+        $response->assertStatus(200);
+        $response->assertSee('Temperature (0.0 to 2.0)');
+        $response->assertSee('Max Completion Tokens');
+        $response->assertSee('Max Tool Iterations');
+        $response->assertSee('Wrap Up Timeout (s)');
+        $response->assertSee('Leave blank for no limit.');
+        $response->assertSee('Default is 60 seconds.');
+
+        $content = $response->getContent();
+        $this->assertMatchesRegularExpression('/<div class="col-md-6">\s*<label[^>]*>Temperature \(0\.0 to 2\.0\)/', $content);
+        $this->assertMatchesRegularExpression('/<div class="col-md-6">\s*<label[^>]*>Max Completion Tokens/', $content);
+        $this->assertMatchesRegularExpression('/<div class="col-md-6">\s*<label[^>]*>Max Tool Iterations/', $content);
+        $this->assertMatchesRegularExpression('/<div class="col-md-6">\s*<label[^>]*>Wrap Up Timeout \(s\)/', $content);
+    }
+
+    public function test_admin_create_page_renders_two_column_runtime_parameters(): void
+    {
+        $admin = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+        ]);
+
+        $response = $this->actingAs($admin)->get(route('admin.llm-providers.create'));
+        $response->assertStatus(200);
+        $response->assertSee('Temperature (0.0 to 2.0)');
+        $response->assertSee('Max Completion Tokens');
+        $response->assertSee('Max Tool Iterations');
+        $response->assertSee('Wrap Up Timeout (s)');
+
+        $content = $response->getContent();
+        $this->assertMatchesRegularExpression('/<div class="col-md-6">\s*<label[^>]*>Temperature \(0\.0 to 2\.0\)/', $content);
+        $this->assertMatchesRegularExpression('/<div class="col-md-6">\s*<label[^>]*>Max Completion Tokens/', $content);
+        $this->assertMatchesRegularExpression('/<div class="col-md-6">\s*<label[^>]*>Max Tool Iterations/', $content);
+        $this->assertMatchesRegularExpression('/<div class="col-md-6">\s*<label[^>]*>Wrap Up Timeout \(s\)/', $content);
     }
 }
