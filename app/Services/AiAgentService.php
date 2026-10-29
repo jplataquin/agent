@@ -10,6 +10,7 @@ use App\Models\Skill;
 use App\Models\TokenMetric;
 use App\Services\Llm\LlmAdapterFactory;
 use Exception;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class AiAgentService
@@ -158,7 +159,15 @@ Important Tool Response Guidelines:
             }
         };
 
+        $forcedWrapUp = false;
+
         while ($maxIterations === null || $currentIteration < $maxIterations) {
+            // Check if user requested early wrap-up
+            if (Cache::pull('chat_wrap_up_'.$session->id)) {
+                $forcedWrapUp = true;
+                break;
+            }
+
             $currentIteration++;
             $messages = $this->buildMessagesPayload($session);
 
@@ -223,6 +232,12 @@ Important Tool Response Guidelines:
                         }
                     }
 
+                    // Check if wrap-up was requested during tool execution
+                    if (Cache::pull('chat_wrap_up_'.$session->id)) {
+                        $forcedWrapUp = true;
+                        break;
+                    }
+
                     // If max limit is defined and reached, break loop to force final synthesis
                     if ($maxIterations !== null && $currentIteration >= $maxIterations) {
                         break;
@@ -260,9 +275,12 @@ Important Tool Response Guidelines:
             }
         }
 
-        // Tool execution limit reached: force final synthesis turn with tools disabled
+        // Tool execution limit reached or early wrap-up requested: force final synthesis turn with tools disabled
         $messages = $this->buildMessagesPayload($session);
-        $synthesisPrompt = $systemPrompt."\n\nNotice: Maximum tool execution limit reached. Provide a comprehensive final answer to the user synthesizing all information gathered from the tools above. Do not attempt to call any more tools.";
+        $reasonNotice = $forcedWrapUp
+            ? "Notice: The user requested an early wrap-up. Synthesize all findings and tool outputs gathered so far into a concise, direct final response. Do not call any further tools."
+            : "Notice: Maximum tool execution limit reached. Provide a comprehensive final answer to the user synthesizing all information gathered from the tools above. Do not attempt to call any more tools.";
+        $synthesisPrompt = $systemPrompt."\n\n".$reasonNotice;
 
         try {
             if ($onHeartbeat) {

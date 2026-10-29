@@ -951,6 +951,9 @@
                         <div class="spinner-grow spinner-grow-sm text-primary" role="status"></div>
                         <span class="small text-muted" id="typingText">Thinking &amp; analyzing systems...</span>
                         <span class="badge bg-secondary-subtle text-secondary rounded-pill font-monospace" id="thinkingTimer" style="font-size: 0.75rem;">0s</span>
+                        <button type="button" id="wrapUpBtn" class="btn btn-sm btn-outline-warning d-none py-0 px-2" style="font-size: 0.75rem;" title="Force LLM to wrap up and synthesize answer">
+                            <i class="bi bi-stop-circle me-1"></i>Wrap it up
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1427,6 +1430,8 @@
     const renameUrl = "{{ route('chat.rename', $activeSession, false) }}";
     const pinUrl = "{{ route('chat.pin', $activeSession, false) }}";
     const regenerateUrl = "{{ route('chat.regenerate', $activeSession, false) }}";
+    const wrapUpUrl = "{{ route('chat.wrap-up', $activeSession, false) }}";
+    const wrapUpTimeout = {{ (int) ($activeProvider->wrap_up_timeout ?? 60) }};
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
     // 1. Markdown Rendering & Syntax Highlighting with "Copy Code" button
@@ -1773,6 +1778,12 @@
 
         function startThinkingTimer() {
             const timerElem = document.getElementById('thinkingTimer');
+            const wrapUpBtn = document.getElementById('wrapUpBtn');
+            if (wrapUpBtn) {
+                wrapUpBtn.classList.add('d-none');
+                wrapUpBtn.disabled = false;
+                wrapUpBtn.innerHTML = '<i class="bi bi-stop-circle me-1"></i>Wrap it up';
+            }
             if (timerElem) timerElem.textContent = '0s';
             thinkingStartTime = Date.now();
             clearInterval(thinkingTimerInterval);
@@ -1780,6 +1791,10 @@
                 if (timerElem) {
                     const elapsed = (Date.now() - thinkingStartTime) / 1000;
                     timerElem.textContent = formatDuration(elapsed);
+
+                    if (wrapUpBtn && elapsed >= wrapUpTimeout && wrapUpBtn.classList.contains('d-none')) {
+                        wrapUpBtn.classList.remove('d-none');
+                    }
                 }
             }, 250);
         }
@@ -1787,6 +1802,10 @@
         function stopThinkingTimer() {
             clearInterval(thinkingTimerInterval);
             thinkingTimerInterval = null;
+            const wrapUpBtn = document.getElementById('wrapUpBtn');
+            if (wrapUpBtn) {
+                wrapUpBtn.classList.add('d-none');
+            }
         }
 
         function submitMessage() {
@@ -1995,6 +2014,26 @@
             submitMessage();
             return false;
         });
+
+        const wrapUpBtn = document.getElementById('wrapUpBtn');
+        if (wrapUpBtn) {
+            wrapUpBtn.addEventListener('click', function (e) {
+                e.preventDefault();
+                wrapUpBtn.disabled = true;
+                wrapUpBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Wrapping up...';
+
+                fetch(wrapUpUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                    }
+                }).catch(err => {
+                    console.error('Failed to send wrap up signal:', err);
+                });
+            });
+        }
     });
 </script>
 @endif

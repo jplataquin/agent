@@ -8,6 +8,7 @@ use App\Models\LlmProvider;
 use App\Services\AiAgentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ChatController extends Controller
@@ -355,6 +356,23 @@ class ChatController extends Controller
             'Cache-Control' => 'no-cache, private',
             'Connection' => 'keep-alive',
             'X-Accel-Buffering' => 'no',
+        ]);
+    }
+
+    /**
+     * Request an early synthesis of the active streaming response.
+     */
+    public function wrapUp(Request $request, ChatSession $session)
+    {
+        if ($session->user_id !== Auth::id()) {
+            abort(403);
+        }
+
+        Cache::put('chat_wrap_up_'.$session->id, true, now()->addMinutes(10));
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Wrap up signal sent successfully.',
         ]);
     }
 }
