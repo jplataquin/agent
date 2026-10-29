@@ -156,4 +156,49 @@ class PlaywrightMcpIntegrationTest extends TestCase
         $this->assertTrue($result['success']);
         $this->assertStringContainsString('Playwright execution error', $result['output']);
     }
+
+    public function test_mcp_service_handles_official_playwright_accessibility_snapshot_responses()
+    {
+        McpServer::create([
+            'name' => 'Playwright Headless Browser MCP',
+            'endpoint_url' => 'http://localhost:3030/mcp',
+            'auth_type' => 'none',
+            'is_active' => true,
+            'tools_cache' => [
+                [
+                    'name' => 'browser_snapshot',
+                    'description' => 'Capture accessibility snapshot of current page',
+                    'inputSchema' => [
+                        'type' => 'object',
+                        'properties' => [],
+                    ],
+                ],
+            ],
+        ]);
+
+        $yamlSnapshot = "### Page\n- Page URL: https://example.com/\n- Page Title: Example Domain\n### Snapshot\n```yaml\n- generic [active] [ref=e1]:\n  - link \"Learn more\" [ref=e2]\n```";
+
+        Http::fake([
+            'http://localhost:3030/mcp' => Http::response([
+                'jsonrpc' => '2.0',
+                'id' => 456,
+                'result' => [
+                    'content' => [
+                        [
+                            'type' => 'text',
+                            'text' => $yamlSnapshot,
+                        ],
+                    ],
+                    'isError' => false,
+                ],
+            ], 200),
+        ]);
+
+        $mcpService = app(McpService::class);
+        $result = $mcpService->executeTool('browser_snapshot', []);
+
+        $this->assertTrue($result['success']);
+        $this->assertStringContainsString('ref=e2', $result['output']);
+        $this->assertStringContainsString('Example Domain', $result['output']);
+    }
 }

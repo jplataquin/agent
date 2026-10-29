@@ -30,3 +30,5 @@ Thumbs.db
 .agent-states/
 .gemini
 .gemini/
+.playwright-mcp
+.playwright-mcp/
