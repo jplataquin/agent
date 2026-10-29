@@ -7,9 +7,14 @@
             <h4 class="fw-bold mb-1"><i class="bi bi-hdd-network text-primary me-2"></i>HTTP MCP Servers</h4>
             <p class="text-muted small mb-0">Model Context Protocol endpoints connecting the AI agent to your company databases, wiki, and APIs.</p>
         </div>
-        <a href="{{ route('admin.mcp-servers.create') }}" class="btn btn-primary rounded-pill btn-sm px-3">
-            <i class="bi bi-plus-lg me-1"></i> Register MCP Server
-        </a>
+        <div class="d-flex gap-2">
+            <a href="{{ route('admin.mcp-diagnostics.index') }}" class="btn btn-outline-danger rounded-pill btn-sm px-3">
+                <i class="bi bi-heart-pulse me-1"></i> Diagnostics & Health
+            </a>
+            <a href="{{ route('admin.mcp-servers.create') }}" class="btn btn-primary rounded-pill btn-sm px-3">
+                <i class="bi bi-plus-lg me-1"></i> Register MCP Server
+            </a>
+        </div>
     </div>
 
     <div class="card border-0 shadow-sm rounded-3">

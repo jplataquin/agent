@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\BuiltInToolController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\LlmProviderController;
 use App\Http\Controllers\Admin\MasterPromptController;
+use App\Http\Controllers\Admin\McpDiagnosticsController;
 use App\Http\Controllers\Admin\McpServerController;
 use App\Http\Controllers\Admin\SkillController;
 use App\Http\Controllers\Admin\TokenMetricController;
@@ -62,6 +63,11 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     // Built-in MCP Tools Test UI
     Route::get('built-in-tools', [BuiltInToolController::class, 'index'])->name('built-in-tools.index');
     Route::post('built-in-tools/test', [BuiltInToolController::class, 'test'])->name('built-in-tools.test');
+
+    // MCP Diagnostics & Subsystem Health Audit
+    Route::get('mcp-diagnostics', [McpDiagnosticsController::class, 'index'])->name('mcp-diagnostics.index');
+    Route::post('mcp-diagnostics/run', [McpDiagnosticsController::class, 'runDiagnostics'])->name('mcp-diagnostics.run');
+    Route::post('mcp-diagnostics/action', [McpDiagnosticsController::class, 'quickAction'])->name('mcp-diagnostics.action');
 
     // Master Prompts Management
     Route::resource('master-prompts', MasterPromptController::class);
@@ -125,4 +131,3 @@ Route::get('/offline.html', function () {
         'Content-Type' => 'text/html; charset=utf-8',
     ]);
 });
-

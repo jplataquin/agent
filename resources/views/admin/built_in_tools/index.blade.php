@@ -14,7 +14,10 @@
             <h3 class="fw-bold mb-1"><i class="bi bi-terminal text-primary me-2"></i>Built-in MCP Tools Tester</h3>
             <p class="text-muted small mb-0">Manually invoke and inspect built-in MCP tools like <code>web_fetch</code>, <code>web_search</code>, or custom scripts.</p>
         </div>
-        <div>
+        <div class="d-flex gap-2">
+            <a href="{{ route('admin.mcp-diagnostics.index') }}" class="btn btn-outline-danger btn-sm rounded-pill px-3">
+                <i class="bi bi-heart-pulse me-1"></i> Subsystem Diagnostics
+            </a>
             <a href="{{ route('admin.dashboard') }}" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
                 <i class="bi bi-arrow-left me-1"></i> Dashboard
             </a>
