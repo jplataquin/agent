@@ -48,8 +48,12 @@ class McpService
      * Check if the MCP server endpoint refers specifically to our internal built-in server.
      * Prevents hijacking external servers that share an /api/mcp path or similar names.
      */
-    protected function isBuiltInServer(McpServer $server): bool
+    public function isBuiltInServer(McpServer $server): bool
     {
+        if (in_array($server->name, ['Internal Tools (Native)', 'Built-in Web & System MCP', 'Laravel Built-in MCP Server'], true)) {
+            return true;
+        }
+
         $url = trim($server->endpoint_url);
 
         // Explicit relative path on current app
@@ -552,62 +556,98 @@ class McpService
 
     /**
      * Collect all tools from all active MCP servers formatted for LLM function calling.
+     * Guaranteed to always include live native internal tools.
      */
     public function getAllActiveTools(): array
     {
         $servers = McpServer::where('is_active', true)->get();
         $formattedTools = [];
+        $includedToolNames = [];
 
+        // 1. Always dynamically include all native internal tools from BuiltInToolsService
+        $internalServer = $servers->first(fn ($s) => $this->isBuiltInServer($s));
+        $internalServerName = $internalServer ? $internalServer->name : 'Internal Tools (Native)';
+        $internalServerId = $internalServer?->id;
+        $nativeTools = $this->builtInTools->getToolsDeclaration();
+
+        foreach ($nativeTools as $tool) {
+            $formattedTools[] = $this->formatToolForLlm($tool, $internalServerName, $internalServerId, true);
+            $includedToolNames[] = $tool['name'];
+        }
+
+        // Auto-heal database record: If internal server exists and cache is out of date, sync it
+        if ($internalServer && (! is_array($internalServer->tools_cache) || count($internalServer->tools_cache) < count($nativeTools))) {
+            $internalServer->update([
+                'tools_cache' => $nativeTools,
+                'last_sync_at' => now(),
+                'last_sync_status' => 'success',
+            ]);
+        }
+
+        // 2. Append tools from external MCP servers
         foreach ($servers as $server) {
+            if ($this->isBuiltInServer($server)) {
+                continue; // Native internal tools are already loaded dynamically above
+            }
+
             $tools = $server->tools_cache ?? [];
             if (! is_array($tools)) {
                 continue;
             }
 
             foreach ($tools as $tool) {
-                if (empty($tool['name'])) {
+                if (empty($tool['name']) || in_array($tool['name'], $includedToolNames, true)) {
                     continue;
                 }
 
-                $parameters = $tool['inputSchema']
-                    ?? $tool['input_schema']
-                    ?? $tool['parameters']
-                    ?? $tool['schema']
-                    ?? [
-                        'type' => 'object',
-                        'properties' => (object) [],
-                    ];
-
-                if (! is_array($parameters) || empty($parameters)) {
-                    $parameters = [
-                        'type' => 'object',
-                        'properties' => (object) [],
-                    ];
-                } else {
-                    if (! isset($parameters['type'])) {
-                        $parameters['type'] = 'object';
-                    }
-                    if (! isset($parameters['properties']) || (is_array($parameters['properties']) && empty($parameters['properties']))) {
-                        $parameters['properties'] = (object) [];
-                    }
-                }
-
-                $isInternal = $this->isBuiltInServer($server);
-                $typeLabel = $isInternal ? 'Internal tool' : 'MCP tool';
-                $formattedTools[] = [
-                    'type' => 'function',
-                    'function' => [
-                        'name' => $tool['name'],
-                        'description' => ($tool['description'] ?? $typeLabel)." (Provided by {$server->name})",
-                        'parameters' => $parameters,
-                    ],
-                    'server_id' => $server->id,
-                    'is_internal' => $isInternal,
-                ];
+                $formattedTools[] = $this->formatToolForLlm($tool, $server->name, $server->id, false);
+                $includedToolNames[] = $tool['name'];
             }
         }
 
         return $formattedTools;
+    }
+
+    /**
+     * Format a tool declaration into the OpenAI / standard function calling schema.
+     */
+    protected function formatToolForLlm(array $tool, string $serverName, ?int $serverId, bool $isInternal): array
+    {
+        $parameters = $tool['inputSchema']
+            ?? $tool['input_schema']
+            ?? $tool['parameters']
+            ?? $tool['schema']
+            ?? [
+                'type' => 'object',
+                'properties' => (object) [],
+            ];
+
+        if (! is_array($parameters) || empty($parameters)) {
+            $parameters = [
+                'type' => 'object',
+                'properties' => (object) [],
+            ];
+        } else {
+            if (! isset($parameters['type'])) {
+                $parameters['type'] = 'object';
+            }
+            if (! isset($parameters['properties']) || (is_array($parameters['properties']) && empty($parameters['properties']))) {
+                $parameters['properties'] = (object) [];
+            }
+        }
+
+        $typeLabel = $isInternal ? 'Internal tool' : 'MCP tool';
+
+        return [
+            'type' => 'function',
+            'function' => [
+                'name' => $tool['name'],
+                'description' => ($tool['description'] ?? $typeLabel)." (Provided by {$serverName})",
+                'parameters' => $parameters,
+            ],
+            'server_id' => $serverId,
+            'is_internal' => $isInternal,
+        ];
     }
 
     /**
@@ -618,27 +658,19 @@ class McpService
     public function getActiveToolsBreakdown(): array
     {
         $servers = McpServer::where('is_active', true)->get();
-        $internalCount = 0;
+        $nativeTools = $this->builtInTools->getToolsDeclaration();
+        $internalCount = count($nativeTools);
         $externalMcpCount = 0;
 
         foreach ($servers as $server) {
-            $tools = $server->tools_cache ?? [];
-            if (! is_array($tools)) {
+            if ($this->isBuiltInServer($server)) {
                 continue;
             }
 
-            $count = count(array_filter($tools, fn ($t) => ! empty($t['name'])));
-            if ($this->isBuiltInServer($server)) {
-                $internalCount += $count;
-            } else {
-                $externalMcpCount += $count;
+            $tools = $server->tools_cache ?? [];
+            if (is_array($tools)) {
+                $externalMcpCount += count(array_filter($tools, fn ($t) => ! empty($t['name'])));
             }
-        }
-
-        // Fallback: If no internal tools server was registered in mcp_servers table yet,
-        // count the declared native internal tools from BuiltInToolsService
-        if ($internalCount === 0) {
-            $internalCount = count($this->builtInTools->getToolsDeclaration());
         }
 
         return [
@@ -653,6 +685,15 @@ class McpService
      */
     public function executeTool(string $toolName, array $arguments): array
     {
+        // 1. Direct execution for native internal tools (guarantees execution regardless of DB cache state)
+        $internalDeclarations = $this->builtInTools->getToolsDeclaration();
+        $internalToolNames = array_column($internalDeclarations, 'name');
+
+        if (in_array($toolName, $internalToolNames, true)) {
+            return $this->builtInTools->execute($toolName, $arguments);
+        }
+
+        // 2. Otherwise locate external MCP server that owns the tool
         $servers = McpServer::where('is_active', true)->get();
         $targetServer = null;
 
@@ -675,7 +716,7 @@ class McpService
             ];
         }
 
-        // Direct execution for native internal tools
+        // Direct execution for native internal tools if mapped to internal server
         if ($this->isBuiltInServer($targetServer)) {
             return $this->builtInTools->execute($toolName, $arguments);
         }

@@ -106,4 +106,60 @@ class InternalToolsTest extends TestCase
         $response->assertSee('Internal', false);
         $response->assertSee('Active', false);
     }
+
+    public function test_get_all_active_tools_guarantees_native_internal_tools_even_without_db_servers(): void
+    {
+        // Delete all server records from database
+        McpServer::query()->delete();
+
+        $mcpService = app(McpService::class);
+        $tools = $mcpService->getAllActiveTools();
+        $toolNames = array_map(fn ($t) => $t['function']['name'] ?? '', $tools);
+
+        $this->assertContains('execute_python_script', $toolNames);
+        $this->assertContains('web_fetch', $toolNames);
+        $this->assertContains('web_search', $toolNames);
+        $this->assertContains('internal_company_directory', $toolNames);
+    }
+
+    public function test_execute_python_script_executes_directly_without_requiring_db_server(): void
+    {
+        McpServer::query()->delete();
+
+        $mcpService = app(McpService::class);
+        $result = $mcpService->executeTool('execute_python_script', [
+            'script' => 'print(6 * 7)',
+        ]);
+
+        $this->assertTrue($result['success']);
+        $this->assertStringContainsString('42', $result['output']);
+    }
+
+    public function test_internal_server_auto_heals_stale_tools_cache_in_database(): void
+    {
+        $internalServer = McpServer::where('name', 'like', '%Internal Tools%')
+            ->orWhere('name', 'like', '%Built-in%')
+            ->first();
+
+        $this->assertNotNull($internalServer);
+
+        // Intentionally simulate a stale database cache with only 1 tool
+        $internalServer->update([
+            'tools_cache' => [
+                ['name' => 'web_fetch', 'description' => 'Only web fetch'],
+            ],
+        ]);
+
+        $this->assertCount(1, $internalServer->fresh()->tools_cache);
+
+        // Invoking getAllActiveTools should auto-heal the cache in database
+        $mcpService = app(McpService::class);
+        $mcpService->getAllActiveTools();
+
+        $healedCache = $internalServer->fresh()->tools_cache;
+        $this->assertGreaterThanOrEqual(4, count($healedCache));
+
+        $healedNames = array_column($healedCache, 'name');
+        $this->assertContains('execute_python_script', $healedNames);
+    }
 }

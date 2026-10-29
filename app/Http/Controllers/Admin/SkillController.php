@@ -107,6 +107,25 @@ MSG;
         }
     }
 
+    /**
+     * Render the Doctor report in a clean standalone full page view (no navigation).
+     */
+    public function doctorReport(Request $request, McpService $mcpService, LlmAdapterFactory $adapterFactory)
+    {
+        $report = (string) $request->input('report');
+
+        // If not supplied directly via POST from modal, execute doctor protocol on-demand
+        if (trim($report) === '') {
+            $doctorResponse = $this->doctor($mcpService, $adapterFactory);
+            $data = json_decode($doctorResponse->getContent(), true) ?: [];
+            $report = $data['report'] ?? ($data['message'] ?? 'No report generated.');
+        }
+
+        $provider = LlmProvider::getDefault();
+
+        return view('admin.skills.doctor_report', compact('report', 'provider'));
+    }
+
     public function index()
     {
         $skills = Skill::latest()->paginate(15);
