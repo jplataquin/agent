@@ -167,4 +167,42 @@ class ChatAdvancedFeaturesTest extends TestCase
         $response->assertSee('mermaid@10/dist/mermaid.min.js', false);
         $response->assertSee('renderMermaidGraphs', false);
     }
+
+    public function test_chat_view_renders_latex_math_libraries_and_renderer()
+    {
+        $user = User::where('role', User::ROLE_REGULAR)->first();
+        $session = ChatSession::create([
+            'user_id' => $user->id,
+            'title' => 'Test LaTeX Chat',
+        ]);
+
+        $response = $this->actingAs($user)->get("/chat/{$session->id}");
+        $response->assertStatus(200);
+        $response->assertSee('katex@0.16.11/dist/katex.min.css', false);
+        $response->assertSee('katex@0.16.11/dist/katex.min.js', false);
+        $response->assertSee('katex@0.16.11/dist/contrib/auto-render.min.js', false);
+        $response->assertSee('mathExtension', false);
+        $response->assertSee('window.renderMath', false);
+    }
+
+    public function test_chat_view_renders_assistant_latex_formulas()
+    {
+        $user = User::where('role', User::ROLE_REGULAR)->first();
+        $session = ChatSession::create([
+            'user_id' => $user->id,
+            'title' => 'Math Formula Chat',
+        ]);
+
+        $latexContent = 'The formula is $E = mc^2$ and block: $$\\int_0^1 x^2 dx = \\frac{1}{3}$$';
+        ChatMessage::create([
+            'chat_session_id' => $session->id,
+            'role' => 'assistant',
+            'content' => $latexContent,
+        ]);
+
+        $response = $this->actingAs($user)->get("/chat/{$session->id}");
+        $response->assertStatus(200);
+        $response->assertSee('message-assistant markdown-body', false);
+        $response->assertSee(e($latexContent), false);
+    }
 }

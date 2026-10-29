@@ -42,6 +42,9 @@
     <!-- Highlight.js for Syntax Highlighting -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css">
 
+    <!-- KaTeX for Math & LaTeX formula rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+
     <!-- Scripts -->
     @vite(['resources/sass/app.scss', 'resources/js/app.js'])
 
@@ -341,6 +344,155 @@
     <!-- Markdown Parser & Highlight.js -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+    <!-- KaTeX for LaTeX Math formula parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+    <script>
+        // Configure Marked to support LaTeX math expressions ($...$, $$...$$, \(...\), \[...\], \begin{env}...\end{env})
+        if (typeof marked !== 'undefined' && typeof katex !== 'undefined') {
+            const mathExtension = {
+                extensions: [
+                    {
+                        name: 'mathBlock',
+                        level: 'block',
+                        start(src) {
+                            const match = src.match(/(\$\$|\\\[|\\begin\{)/);
+                            return match ? match.index : -1;
+                        },
+                        tokenizer(src) {
+                            const dollarMatch = src.match(/^\$\$([\s\S]+?)\$\$(?:\n|$)/);
+                            if (dollarMatch) {
+                                return {
+                                    type: 'mathBlock',
+                                    raw: dollarMatch[0],
+                                    text: dollarMatch[1].trim(),
+                                    displayMode: true
+                                };
+                            }
+                            const bracketMatch = src.match(/^\\\[([\s\S]+?)\\\](?:\n|$)/);
+                            if (bracketMatch) {
+                                return {
+                                    type: 'mathBlock',
+                                    raw: bracketMatch[0],
+                                    text: bracketMatch[1].trim(),
+                                    displayMode: true
+                                };
+                            }
+                            const envMatch = src.match(/^(\\begin\{([a-zA-Z0-9*]+)\}[\s\S]+?\\end\{\2\})(?:\n|$)/);
+                            if (envMatch) {
+                                return {
+                                    type: 'mathBlock',
+                                    raw: envMatch[0],
+                                    text: envMatch[1].trim(),
+                                    displayMode: true
+                                };
+                            }
+                        },
+                        renderer(token) {
+                            try {
+                                return '<div class="math-block my-2 overflow-auto text-center">' +
+                                    katex.renderToString(token.text, { displayMode: true, throwOnError: false }) +
+                                    '</div>\n';
+                            } catch (e) {
+                                return '<pre class="math-error">' + token.raw + '</pre>';
+                            }
+                        }
+                    },
+                    {
+                        name: 'mathInline',
+                        level: 'inline',
+                        start(src) {
+                            let pos = 0;
+                            while (pos < src.length) {
+                                const sub = src.slice(pos);
+                                const m = sub.match(/(\$\$|\\\(|\\\[|\$)/);
+                                if (!m) return -1;
+                                const matchIndex = pos + m.index;
+                                if (m[0] === '$' && matchIndex > 0 && src[matchIndex - 1] === '\\') {
+                                    pos = matchIndex + 1;
+                                    continue;
+                                }
+                                return matchIndex;
+                            }
+                            return -1;
+                        },
+                        tokenizer(src) {
+                            const doubleDollarMatch = src.match(/^\$\$((?:\\.|[^\\\n])*?)\$\$/);
+                            if (doubleDollarMatch) {
+                                return {
+                                    type: 'mathInline',
+                                    raw: doubleDollarMatch[0],
+                                    text: doubleDollarMatch[1].trim(),
+                                    displayMode: true
+                                };
+                            }
+                            const bracketMatch = src.match(/^\\\[((?:\\.|[^\\\]])*?)\\\]/);
+                            if (bracketMatch) {
+                                return {
+                                    type: 'mathInline',
+                                    raw: bracketMatch[0],
+                                    text: bracketMatch[1].trim(),
+                                    displayMode: true
+                                };
+                            }
+                            const parenMatch = src.match(/^\\\(((?:\\.|[^\\\)])*?)\\\)/);
+                            if (parenMatch) {
+                                return {
+                                    type: 'mathInline',
+                                    raw: parenMatch[0],
+                                    text: parenMatch[1].trim(),
+                                    displayMode: false
+                                };
+                            }
+                            const singleDollarMatch = src.match(/^\$((?:\\\$|[^\s$\n])(?:\\\$|[^\n$])*?(?:\\\$|[^\s$\n]))\$/);
+                            if (singleDollarMatch) {
+                                return {
+                                    type: 'mathInline',
+                                    raw: singleDollarMatch[0],
+                                    text: singleDollarMatch[1].trim(),
+                                    displayMode: false
+                                };
+                            }
+                            const singleCharMatch = src.match(/^\$([a-zA-Z0-9+\-=<>\\])\$/);
+                            if (singleCharMatch) {
+                                return {
+                                    type: 'mathInline',
+                                    raw: singleCharMatch[0],
+                                    text: singleCharMatch[1].trim(),
+                                    displayMode: false
+                                };
+                            }
+                        },
+                        renderer(token) {
+                            try {
+                                return katex.renderToString(token.text, { displayMode: token.displayMode, throwOnError: false });
+                            } catch (e) {
+                                return token.raw;
+                            }
+                        }
+                    }
+                ]
+            };
+            marked.use(mathExtension);
+        }
+
+        // Global helper to render math in any container
+        window.renderMath = function(container) {
+            if (typeof renderMathInElement === 'function' && container) {
+                renderMathInElement(container, {
+                    delimiters: [
+                        { left: '$$', right: '$$', display: true },
+                        { left: '\\[', right: '\\]', display: true },
+                        { left: '\\(', right: '\\)', display: false },
+                        { left: '$', right: '$', display: false }
+                    ],
+                    throwOnError: false,
+                    ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+                });
+            }
+        };
+    </script>
 
     <!-- Mermaid.js for Diagrams & Flowcharts -->
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>

@@ -276,6 +276,9 @@
                 const raw = el.getAttribute('data-raw-content');
                 if (raw) {
                     el.innerHTML = marked.parse(raw);
+                    if (typeof window.renderMath === 'function') {
+                        window.renderMath(el);
+                    }
                 }
             });
         }

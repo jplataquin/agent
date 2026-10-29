@@ -210,6 +210,22 @@
         font-weight: 600;
     }
 
+    /* KaTeX / Math Formula Styles */
+    .katex-display {
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 6px 0;
+        margin: 0.75rem 0;
+    }
+    .math-block {
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 4px 0;
+    }
+    .katex {
+        font-size: 1.05em;
+    }
+
     /* Code Blocks & Copy Button */
     .code-block-wrapper {
         position: relative;
@@ -353,6 +369,9 @@
     [data-bs-theme="dark"] .action-btn:hover {
         background: rgba(255,255,255,0.08);
         color: #e2e8f0;
+    }
+    [data-bs-theme="dark"] .katex {
+        color: #f1f5f9;
     }
 
     @media (max-width: 767.98px) {
@@ -1438,6 +1457,11 @@
         const parsed = marked.parse(raw);
         element.innerHTML = parsed;
 
+        // Ensure any unparsed LaTeX math expressions in the element are rendered
+        if (typeof window.renderMath === 'function') {
+            window.renderMath(element);
+        }
+
         // Apply syntax highlighting and copy code buttons to all <pre><code> blocks
         element.querySelectorAll('pre code').forEach((block) => {
             hljs.highlightElement(block);
@@ -1516,7 +1540,8 @@
     window.copyMessageText = function(elementId) {
         const el = document.getElementById(elementId);
         if (!el) return;
-        const text = el.innerText;
+        const raw = el.getAttribute('data-raw-content');
+        const text = raw || el.innerText;
         navigator.clipboard.writeText(text).then(() => {
             window.showToast('Response copied to clipboard!', 'success');
         }).catch(() => {
