@@ -18,6 +18,7 @@ class LlmProvider extends Model
         'temperature',
         'max_tokens',
         'max_tool_iterations',
+        'wrap_up_timeout',
         'is_default',
         'is_active',
     ];
@@ -26,6 +27,7 @@ class LlmProvider extends Model
         'temperature' => 'float',
         'max_tokens' => 'integer',
         'max_tool_iterations' => 'integer',
+        'wrap_up_timeout' => 'integer',
         'is_default' => 'boolean',
         'is_active' => 'boolean',
     ];

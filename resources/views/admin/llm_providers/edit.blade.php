@@ -80,18 +80,23 @@
                 </div>
 
                 <div class="row mb-3">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="form-label fw-semibold">Temperature (0.0 to 2.0)</label>
                         <input type="number" step="0.05" min="0" max="2" name="temperature" class="form-control" value="{{ old('temperature', $provider->temperature) }}" required>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="form-label fw-semibold">Max Completion Tokens</label>
                         <input type="number" name="max_tokens" class="form-control" value="{{ old('max_tokens', $provider->max_tokens) }}">
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="form-label fw-semibold">Max Tool Iterations</label>
                         <input type="number" min="1" name="max_tool_iterations" class="form-control" placeholder="No limit" value="{{ old('max_tool_iterations', $provider->max_tool_iterations) }}">
                         <div class="form-text small">Leave blank for no limit.</div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Wrap Up Timeout (s)</label>
+                        <input type="number" min="1" name="wrap_up_timeout" class="form-control" placeholder="60" value="{{ old('wrap_up_timeout', $provider->wrap_up_timeout ?? 60) }}">
+                        <div class="form-text small">Default is 60 seconds.</div>
                     </div>
                 </div>
 

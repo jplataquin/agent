@@ -970,6 +970,12 @@
                         <div class="spinner-grow spinner-grow-sm text-primary" role="status"></div>
                         <span class="small text-muted" id="typingText">Thinking &amp; analyzing systems...</span>
                         <span class="badge bg-secondary-subtle text-secondary rounded-pill font-monospace" id="thinkingTimer" style="font-size: 0.75rem;">0s</span>
+                        <button type="button" id="wrapUpBtn" class="btn btn-sm btn-outline-warning d-none py-0 px-2" style="font-size: 0.75rem;" title="Force LLM to wrap up and synthesize answer">
+                            <i class="bi bi-stop-circle me-1"></i>Wrap it up
+                        </button>
+                        <button type="button" id="cancelBtn" class="btn btn-sm btn-outline-danger d-none py-0 px-2" style="font-size: 0.75rem;" title="Cancel response generation">
+                            <i class="bi bi-x-circle me-1"></i>Cancel
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1446,7 +1452,15 @@
     const renameUrl = "{{ route('chat.rename', $activeSession, false) }}";
     const pinUrl = "{{ route('chat.pin', $activeSession, false) }}";
     const regenerateUrl = "{{ route('chat.regenerate', $activeSession, false) }}";
+    const wrapUpUrl = "{{ route('chat.wrap-up', $activeSession, false) }}";
+    const cancelUrl = "{{ route('chat.cancel', $activeSession, false) }}";
+    const wrapUpTimeout = {{ (int) ($activeProvider->wrap_up_timeout ?? 60) }};
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+    let activeEventSource = null;
+    let activeAssistantBubble = null;
+    let activeAccumulatedContent = '';
+    let isCurrentTurnCancelled = false;
 
     // 1. Markdown Rendering & Syntax Highlighting with "Copy Code" button
     function renderMarkdown(element) {
@@ -1798,6 +1812,18 @@
 
         function startThinkingTimer() {
             const timerElem = document.getElementById('thinkingTimer');
+            const wrapUpBtn = document.getElementById('wrapUpBtn');
+            const cancelBtn = document.getElementById('cancelBtn');
+            if (wrapUpBtn) {
+                wrapUpBtn.classList.add('d-none');
+                wrapUpBtn.disabled = false;
+                wrapUpBtn.innerHTML = '<i class="bi bi-stop-circle me-1"></i>Wrap it up';
+            }
+            if (cancelBtn) {
+                cancelBtn.classList.add('d-none');
+                cancelBtn.disabled = false;
+                cancelBtn.innerHTML = '<i class="bi bi-x-circle me-1"></i>Cancel';
+            }
             if (timerElem) timerElem.textContent = '0s';
             thinkingStartTime = Date.now();
             clearInterval(thinkingTimerInterval);
@@ -1805,6 +1831,14 @@
                 if (timerElem) {
                     const elapsed = (Date.now() - thinkingStartTime) / 1000;
                     timerElem.textContent = formatDuration(elapsed);
+
+                    if (cancelBtn && elapsed >= 10 && cancelBtn.classList.contains('d-none')) {
+                        cancelBtn.classList.remove('d-none');
+                    }
+
+                    if (wrapUpBtn && elapsed >= wrapUpTimeout && wrapUpBtn.classList.contains('d-none')) {
+                        wrapUpBtn.classList.remove('d-none');
+                    }
                 }
             }, 250);
         }
@@ -1812,6 +1846,14 @@
         function stopThinkingTimer() {
             clearInterval(thinkingTimerInterval);
             thinkingTimerInterval = null;
+            const wrapUpBtn = document.getElementById('wrapUpBtn');
+            if (wrapUpBtn) {
+                wrapUpBtn.classList.add('d-none');
+            }
+            const cancelBtn = document.getElementById('cancelBtn');
+            if (cancelBtn) {
+                cancelBtn.classList.add('d-none');
+            }
         }
 
         function submitMessage() {
@@ -1852,8 +1894,13 @@
             let accumulatedContent = '';
             let isFirstChunk = true;
 
+            isCurrentTurnCancelled = false;
+            activeAssistantBubble = null;
+            activeAccumulatedContent = '';
+
             const sseUrl = `${streamUrl}?message=${encodeURIComponent(text)}`;
             const eventSource = new EventSource(sseUrl);
+            activeEventSource = eventSource;
 
             function finalizeAssistantMessage(replyText, sessionTitle, durationFormatted) {
                 stopThinkingTimer();
@@ -1946,15 +1993,18 @@
                             assistantBubble.id = newMsgId;
                             assistantRow.appendChild(assistantBubble);
                             messagesContainer.insertBefore(assistantRow, typingIndicator);
+                            activeAssistantBubble = assistantBubble;
                         }
 
                         accumulatedContent += data.chunk;
+                        activeAccumulatedContent = accumulatedContent;
                         assistantBubble.setAttribute('data-raw-content', accumulatedContent);
                         renderMarkdown(assistantBubble);
                         scrollToBottom();
                     }
 
                     if (data.done) {
+                        activeEventSource = null;
                         eventSource.close();
                         const durationSeconds = (Date.now() - thinkingStartTime) / 1000;
                         const durationFormatted = formatDuration(durationSeconds);
@@ -1968,6 +2018,10 @@
             };
 
             eventSource.onerror = function () {
+                activeEventSource = null;
+                if (isCurrentTurnCancelled) {
+                    return;
+                }
                 eventSource.close();
                 stopThinkingTimer();
                 typingIndicator.classList.add('d-none');
@@ -2020,6 +2074,78 @@
             submitMessage();
             return false;
         });
+
+        const wrapUpBtn = document.getElementById('wrapUpBtn');
+        if (wrapUpBtn) {
+            wrapUpBtn.addEventListener('click', function (e) {
+                e.preventDefault();
+                wrapUpBtn.disabled = true;
+                wrapUpBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Wrapping up...';
+
+                fetch(wrapUpUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                    }
+                }).catch(err => {
+                    console.error('Failed to send wrap up signal:', err);
+                });
+            });
+        }
+
+        const cancelBtn = document.getElementById('cancelBtn');
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', function (e) {
+                e.preventDefault();
+                cancelBtn.disabled = true;
+                cancelBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Cancelling...';
+
+                isCurrentTurnCancelled = true;
+                if (activeEventSource) {
+                    activeEventSource.close();
+                    activeEventSource = null;
+                }
+
+                stopThinkingTimer();
+                typingIndicator.classList.add('d-none');
+                input.disabled = false;
+                sendBtn.disabled = false;
+                if (micBtn) micBtn.disabled = false;
+                input.focus();
+
+                fetch(cancelUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                    }
+                }).catch(err => {
+                    console.error('Failed to send cancel signal:', err);
+                });
+
+                // Display cancellation notice in chat UI
+                const cancelText = '⚠️ *[Response generation cancelled by user]*';
+                if (activeAssistantBubble) {
+                    activeAccumulatedContent = (activeAccumulatedContent ? activeAccumulatedContent + '\n\n' : '') + cancelText;
+                    activeAssistantBubble.setAttribute('data-raw-content', activeAccumulatedContent);
+                    renderMarkdown(activeAssistantBubble);
+                } else {
+                    const cancelRow = document.createElement('div');
+                    cancelRow.className = 'message-row assistant-row';
+                    const cancelBubble = document.createElement('div');
+                    cancelBubble.className = 'message-bubble message-assistant markdown-body';
+                    cancelBubble.setAttribute('data-raw-content', cancelText);
+                    renderMarkdown(cancelBubble);
+                    cancelRow.appendChild(cancelBubble);
+                    messagesContainer.insertBefore(cancelRow, typingIndicator);
+                }
+                scrollToBottom();
+                window.showToast('Response generation cancelled.', 'warning');
+            });
+        }
     });
 </script>
 @endif
