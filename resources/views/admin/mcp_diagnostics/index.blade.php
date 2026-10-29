@@ -8,11 +8,11 @@
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb mb-1 small">
                     <li class="breadcrumb-item"><a href="{{ route('admin.dashboard') }}">Admin</a></li>
-                    <li class="breadcrumb-item active" aria-current="page">MCP Diagnostics</li>
+                    <li class="breadcrumb-item active" aria-current="page">All Tools Diagnostic</li>
                 </ol>
             </nav>
-            <h3 class="fw-bold mb-1"><i class="bi bi-heart-pulse text-danger me-2"></i>MCP Diagnostics & Health Auditor</h3>
-            <p class="text-muted small mb-0">Automated health inspection, runtime version verification, and dependency auditing for built-in and external MCP servers.</p>
+            <h3 class="fw-bold mb-1"><i class="bi bi-heart-pulse text-danger me-2"></i>All Tools Diagnostic</h3>
+            <p class="text-muted small mb-0">Automated health inspection, runtime version verification, and dependency auditing for internal tools and external MCP servers.</p>
         </div>
         <div class="d-flex gap-2 align-items-center">
             <span class="text-muted small d-none d-md-inline" id="lastAuditedText">Audited: {{ $audit['summary']['audited_at_formatted'] }}</span>
@@ -73,9 +73,9 @@
 
     <!-- Subsystems Grid -->
     <div class="row g-4">
-        <!-- 1. Built-in Web & System MCP -->
+        <!-- 1. Native Internal Tools -->
         @php
-            $builtin = $audit['subsystems']['builtin_mcp'];
+            $builtin = $audit['subsystems']['internal_tools'] ?? $audit['subsystems']['builtin_mcp'];
             $builtinBadgeClass = match($builtin['status']) {
                 'ok' => 'bg-success-subtle text-success',
                 'warning' => 'bg-warning-subtle text-warning',
@@ -87,7 +87,7 @@
                 <div class="card-header border-bottom py-3 d-flex justify-content-between align-items-center">
                     <div class="d-flex align-items-center gap-2">
                         <i class="bi bi-terminal text-primary fs-5"></i>
-                        <h6 class="fw-bold mb-0">Built-in Web & System MCP</h6>
+                        <h6 class="fw-bold mb-0">Internal Tools (Native Web & System)</h6>
                     </div>
                     <span class="badge {{ $builtinBadgeClass }}" id="badge_builtin">{{ strtoupper($builtin['status']) }}</span>
                 </div>
@@ -111,7 +111,7 @@
                     </ul>
 
                     <div class="mt-3">
-                        <div class="small fw-semibold text-muted mb-2">Declared Built-in Tools:</div>
+                        <div class="small fw-semibold text-muted mb-2">Declared Internal Tools:</div>
                         <div class="d-flex flex-wrap gap-1">
                             @foreach($builtin['tools'] as $tool)
                                 <span class="badge bg-body-secondary text-body font-monospace small px-2 py-1" title="{{ $tool['description'] ?? '' }}">
@@ -122,8 +122,8 @@
                     </div>
                 </div>
                 <div class="card-footer border-top py-2 d-flex justify-content-end">
-                    <a href="{{ route('admin.built-in-tools.index') }}" class="btn btn-outline-secondary btn-sm rounded-pill">
-                        <i class="bi bi-play-circle me-1"></i> Test in Tool Runner
+                    <a href="{{ route('admin.internal-tools.index') }}" class="btn btn-outline-secondary btn-sm rounded-pill">
+                        <i class="bi bi-play-circle me-1"></i> Test in Internal Tool Runner
                     </a>
                 </div>
             </div>
@@ -403,7 +403,7 @@ document.addEventListener('DOMContentLoaded', function () {
         refreshIcon.classList.add('d-none');
 
         try {
-            const res = await fetch("{{ route('admin.mcp-diagnostics.run') }}", {
+            const res = await fetch("{{ route('admin.all-tools-diagnostic.run') }}", {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -440,7 +440,7 @@ document.addEventListener('DOMContentLoaded', function () {
             this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Registering...';
 
             try {
-                const res = await fetch("{{ route('admin.mcp-diagnostics.action') }}", {
+                const res = await fetch("{{ route('admin.all-tools-diagnostic.action') }}", {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -475,7 +475,7 @@ document.addEventListener('DOMContentLoaded', function () {
             this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
 
             try {
-                const res = await fetch("{{ route('admin.mcp-diagnostics.action') }}", {
+                const res = await fetch("{{ route('admin.all-tools-diagnostic.action') }}", {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

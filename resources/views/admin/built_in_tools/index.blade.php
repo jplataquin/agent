@@ -8,15 +8,15 @@
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb mb-1 small">
                     <li class="breadcrumb-item"><a href="{{ route('admin.dashboard') }}">Admin</a></li>
-                    <li class="breadcrumb-item active" aria-current="page">Built-in MCP Tools</li>
+                    <li class="breadcrumb-item active" aria-current="page">Internal Tools</li>
                 </ol>
             </nav>
-            <h3 class="fw-bold mb-1"><i class="bi bi-terminal text-primary me-2"></i>Built-in MCP Tools Tester</h3>
-            <p class="text-muted small mb-0">Manually invoke and inspect built-in MCP tools like <code>web_fetch</code>, <code>web_search</code>, or custom scripts.</p>
+            <h3 class="fw-bold mb-1"><i class="bi bi-terminal text-primary me-2"></i>Internal Tools Tester</h3>
+            <p class="text-muted small mb-0">Manually invoke and inspect native internal tools like <code>web_fetch</code>, <code>web_search</code>, or custom scripts.</p>
         </div>
         <div class="d-flex gap-2">
-            <a href="{{ route('admin.mcp-diagnostics.index') }}" class="btn btn-outline-danger btn-sm rounded-pill px-3">
-                <i class="bi bi-heart-pulse me-1"></i> Subsystem Diagnostics
+            <a href="{{ route('admin.all-tools-diagnostic.index') }}" class="btn btn-outline-danger btn-sm rounded-pill px-3">
+                <i class="bi bi-heart-pulse me-1"></i> All Tools Diagnostic
             </a>
             <a href="{{ route('admin.dashboard') }}" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
                 <i class="bi bi-arrow-left me-1"></i> Dashboard
@@ -35,7 +35,7 @@
                     <form id="toolTestForm">
                         @csrf
                         <div class="mb-3">
-                            <label for="toolSelect" class="form-label fw-semibold">Select Built-in Tool <span class="text-danger">*</span></label>
+                            <label for="toolSelect" class="form-label fw-semibold">Select Internal Tool <span class="text-danger">*</span></label>
                             <select class="form-select" id="toolSelect" name="tool_name" required>
                                 @foreach($tools as $tool)
                                     <option value="{{ $tool['name'] }}" {{ $tool['name'] === 'web_fetch' ? 'selected' : '' }}>
@@ -282,7 +282,7 @@ document.addEventListener('DOMContentLoaded', function () {
         durationBadge.classList.add('d-none');
 
         try {
-            const res = await fetch("{{ route('admin.built-in-tools.test') }}", {
+            const res = await fetch("{{ route('admin.internal-tools.test') }}", {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

@@ -8,8 +8,8 @@
             <p class="text-muted small mb-0">Model Context Protocol endpoints connecting the AI agent to your company databases, wiki, and APIs.</p>
         </div>
         <div class="d-flex gap-2">
-            <a href="{{ route('admin.mcp-diagnostics.index') }}" class="btn btn-outline-danger rounded-pill btn-sm px-3">
-                <i class="bi bi-heart-pulse me-1"></i> Diagnostics & Health
+            <a href="{{ route('admin.all-tools-diagnostic.index') }}" class="btn btn-outline-danger rounded-pill btn-sm px-3">
+                <i class="bi bi-heart-pulse me-1"></i> All Tools Diagnostic
             </a>
             <a href="{{ route('admin.mcp-servers.create') }}" class="btn btn-primary rounded-pill btn-sm px-3">
                 <i class="bi bi-plus-lg me-1"></i> Register MCP Server

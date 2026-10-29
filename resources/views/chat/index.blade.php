@@ -210,6 +210,22 @@
         font-weight: 600;
     }
 
+    /* KaTeX / Math Formula Styles */
+    .katex-display {
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 6px 0;
+        margin: 0.75rem 0;
+    }
+    .math-block {
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 4px 0;
+    }
+    .katex {
+        font-size: 1.05em;
+    }
+
     /* Code Blocks & Copy Button */
     .code-block-wrapper {
         position: relative;
@@ -353,6 +369,9 @@
     [data-bs-theme="dark"] .action-btn:hover {
         background: rgba(255,255,255,0.08);
         color: #e2e8f0;
+    }
+    [data-bs-theme="dark"] .katex {
+        color: #f1f5f9;
     }
 
     @media (max-width: 767.98px) {
@@ -691,13 +710,17 @@
                         @endif
                     </div>
                     @php
-                        $activeMcpToolsCount = count(app(\App\Services\McpService::class)->getAllActiveTools());
+                        $toolsBreakdown = app(\App\Services\McpService::class)->getActiveToolsBreakdown();
                     @endphp
                     <small class="text-muted d-block" style="font-size: 0.75rem;">
-                        @if($activeMcpToolsCount > 0)
-                            <i class="bi bi-shield-check text-success me-1"></i> {{ $activeMcpToolsCount }} {{ Str::plural('MCP Tool', $activeMcpToolsCount) }} &amp; Voice Connected
+                        @if($toolsBreakdown['external_mcp'] > 0 && $toolsBreakdown['internal'] > 0)
+                            <i class="bi bi-shield-check text-success me-1"></i> {{ $toolsBreakdown['internal'] }} Internal &amp; {{ $toolsBreakdown['external_mcp'] }} MCP {{ Str::plural('Tool', $toolsBreakdown['external_mcp']) }} Connected
+                        @elseif($toolsBreakdown['internal'] > 0)
+                            <i class="bi bi-shield-check text-success me-1"></i> {{ $toolsBreakdown['internal'] }} Internal {{ Str::plural('Tool', $toolsBreakdown['internal']) }} Active &amp; Voice Ready
+                        @elseif($toolsBreakdown['external_mcp'] > 0)
+                            <i class="bi bi-shield-check text-success me-1"></i> {{ $toolsBreakdown['external_mcp'] }} MCP {{ Str::plural('Tool', $toolsBreakdown['external_mcp']) }} Connected
                         @else
-                            <i class="bi bi-shield-exclamation text-warning me-1"></i> 0 MCP Tools Active (Voice Ready)
+                            <i class="bi bi-shield-exclamation text-warning me-1"></i> 0 Tools Active (Voice Ready)
                         @endif
                     </small>
                 </div>
@@ -951,6 +974,12 @@
                         <div class="spinner-grow spinner-grow-sm text-primary" role="status"></div>
                         <span class="small text-muted" id="typingText">Thinking &amp; analyzing systems...</span>
                         <span class="badge bg-secondary-subtle text-secondary rounded-pill font-monospace" id="thinkingTimer" style="font-size: 0.75rem;">0s</span>
+                        <button type="button" id="wrapUpBtn" class="btn btn-sm btn-outline-warning d-none py-0 px-2" style="font-size: 0.75rem;" title="Force LLM to wrap up and synthesize answer">
+                            <i class="bi bi-stop-circle me-1"></i>Wrap it up
+                        </button>
+                        <button type="button" id="cancelBtn" class="btn btn-sm btn-outline-danger d-none py-0 px-2" style="font-size: 0.75rem;" title="Cancel response generation">
+                            <i class="bi bi-x-circle me-1"></i>Cancel
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1427,7 +1456,15 @@
     const renameUrl = "{{ route('chat.rename', $activeSession, false) }}";
     const pinUrl = "{{ route('chat.pin', $activeSession, false) }}";
     const regenerateUrl = "{{ route('chat.regenerate', $activeSession, false) }}";
+    const wrapUpUrl = "{{ route('chat.wrap-up', $activeSession, false) }}";
+    const cancelUrl = "{{ route('chat.cancel', $activeSession, false) }}";
+    const wrapUpTimeout = {{ (int) ($activeProvider->wrap_up_timeout ?? 60) }};
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+    let activeEventSource = null;
+    let activeAssistantBubble = null;
+    let activeAccumulatedContent = '';
+    let isCurrentTurnCancelled = false;
 
     // 1. Markdown Rendering & Syntax Highlighting with "Copy Code" button
     function renderMarkdown(element) {
@@ -1437,6 +1474,11 @@
         // Parse with marked
         const parsed = marked.parse(raw);
         element.innerHTML = parsed;
+
+        // Ensure any unparsed LaTeX math expressions in the element are rendered
+        if (typeof window.renderMath === 'function') {
+            window.renderMath(element);
+        }
 
         // Apply syntax highlighting and copy code buttons to all <pre><code> blocks
         element.querySelectorAll('pre code').forEach((block) => {
@@ -1516,7 +1558,8 @@
     window.copyMessageText = function(elementId) {
         const el = document.getElementById(elementId);
         if (!el) return;
-        const text = el.innerText;
+        const raw = el.getAttribute('data-raw-content');
+        const text = raw || el.innerText;
         navigator.clipboard.writeText(text).then(() => {
             window.showToast('Response copied to clipboard!', 'success');
         }).catch(() => {
@@ -1773,6 +1816,18 @@
 
         function startThinkingTimer() {
             const timerElem = document.getElementById('thinkingTimer');
+            const wrapUpBtn = document.getElementById('wrapUpBtn');
+            const cancelBtn = document.getElementById('cancelBtn');
+            if (wrapUpBtn) {
+                wrapUpBtn.classList.add('d-none');
+                wrapUpBtn.disabled = false;
+                wrapUpBtn.innerHTML = '<i class="bi bi-stop-circle me-1"></i>Wrap it up';
+            }
+            if (cancelBtn) {
+                cancelBtn.classList.add('d-none');
+                cancelBtn.disabled = false;
+                cancelBtn.innerHTML = '<i class="bi bi-x-circle me-1"></i>Cancel';
+            }
             if (timerElem) timerElem.textContent = '0s';
             thinkingStartTime = Date.now();
             clearInterval(thinkingTimerInterval);
@@ -1780,6 +1835,14 @@
                 if (timerElem) {
                     const elapsed = (Date.now() - thinkingStartTime) / 1000;
                     timerElem.textContent = formatDuration(elapsed);
+
+                    if (cancelBtn && elapsed >= 10 && cancelBtn.classList.contains('d-none')) {
+                        cancelBtn.classList.remove('d-none');
+                    }
+
+                    if (wrapUpBtn && elapsed >= wrapUpTimeout && wrapUpBtn.classList.contains('d-none')) {
+                        wrapUpBtn.classList.remove('d-none');
+                    }
                 }
             }, 250);
         }
@@ -1787,6 +1850,14 @@
         function stopThinkingTimer() {
             clearInterval(thinkingTimerInterval);
             thinkingTimerInterval = null;
+            const wrapUpBtn = document.getElementById('wrapUpBtn');
+            if (wrapUpBtn) {
+                wrapUpBtn.classList.add('d-none');
+            }
+            const cancelBtn = document.getElementById('cancelBtn');
+            if (cancelBtn) {
+                cancelBtn.classList.add('d-none');
+            }
         }
 
         function submitMessage() {
@@ -1827,8 +1898,13 @@
             let accumulatedContent = '';
             let isFirstChunk = true;
 
+            isCurrentTurnCancelled = false;
+            activeAssistantBubble = null;
+            activeAccumulatedContent = '';
+
             const sseUrl = `${streamUrl}?message=${encodeURIComponent(text)}`;
             const eventSource = new EventSource(sseUrl);
+            activeEventSource = eventSource;
 
             function finalizeAssistantMessage(replyText, sessionTitle, durationFormatted) {
                 stopThinkingTimer();
@@ -1921,15 +1997,18 @@
                             assistantBubble.id = newMsgId;
                             assistantRow.appendChild(assistantBubble);
                             messagesContainer.insertBefore(assistantRow, typingIndicator);
+                            activeAssistantBubble = assistantBubble;
                         }
 
                         accumulatedContent += data.chunk;
+                        activeAccumulatedContent = accumulatedContent;
                         assistantBubble.setAttribute('data-raw-content', accumulatedContent);
                         renderMarkdown(assistantBubble);
                         scrollToBottom();
                     }
 
                     if (data.done) {
+                        activeEventSource = null;
                         eventSource.close();
                         const durationSeconds = (Date.now() - thinkingStartTime) / 1000;
                         const durationFormatted = formatDuration(durationSeconds);
@@ -1943,6 +2022,10 @@
             };
 
             eventSource.onerror = function () {
+                activeEventSource = null;
+                if (isCurrentTurnCancelled) {
+                    return;
+                }
                 eventSource.close();
                 stopThinkingTimer();
                 typingIndicator.classList.add('d-none');
@@ -1995,6 +2078,78 @@
             submitMessage();
             return false;
         });
+
+        const wrapUpBtn = document.getElementById('wrapUpBtn');
+        if (wrapUpBtn) {
+            wrapUpBtn.addEventListener('click', function (e) {
+                e.preventDefault();
+                wrapUpBtn.disabled = true;
+                wrapUpBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Wrapping up...';
+
+                fetch(wrapUpUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                    }
+                }).catch(err => {
+                    console.error('Failed to send wrap up signal:', err);
+                });
+            });
+        }
+
+        const cancelBtn = document.getElementById('cancelBtn');
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', function (e) {
+                e.preventDefault();
+                cancelBtn.disabled = true;
+                cancelBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Cancelling...';
+
+                isCurrentTurnCancelled = true;
+                if (activeEventSource) {
+                    activeEventSource.close();
+                    activeEventSource = null;
+                }
+
+                stopThinkingTimer();
+                typingIndicator.classList.add('d-none');
+                input.disabled = false;
+                sendBtn.disabled = false;
+                if (micBtn) micBtn.disabled = false;
+                input.focus();
+
+                fetch(cancelUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                    }
+                }).catch(err => {
+                    console.error('Failed to send cancel signal:', err);
+                });
+
+                // Display cancellation notice in chat UI
+                const cancelText = '⚠️ *[Response generation cancelled by user]*';
+                if (activeAssistantBubble) {
+                    activeAccumulatedContent = (activeAccumulatedContent ? activeAccumulatedContent + '\n\n' : '') + cancelText;
+                    activeAssistantBubble.setAttribute('data-raw-content', activeAccumulatedContent);
+                    renderMarkdown(activeAssistantBubble);
+                } else {
+                    const cancelRow = document.createElement('div');
+                    cancelRow.className = 'message-row assistant-row';
+                    const cancelBubble = document.createElement('div');
+                    cancelBubble.className = 'message-bubble message-assistant markdown-body';
+                    cancelBubble.setAttribute('data-raw-content', cancelText);
+                    renderMarkdown(cancelBubble);
+                    cancelRow.appendChild(cancelBubble);
+                    messagesContainer.insertBefore(cancelRow, typingIndicator);
+                }
+                scrollToBottom();
+                window.showToast('Response generation cancelled.', 'warning');
+            });
+        }
     });
 </script>
 @endif

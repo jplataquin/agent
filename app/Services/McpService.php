@@ -592,19 +592,60 @@ class McpService
                     }
                 }
 
+                $isInternal = $this->isBuiltInServer($server);
+                $typeLabel = $isInternal ? 'Internal tool' : 'MCP tool';
                 $formattedTools[] = [
                     'type' => 'function',
                     'function' => [
                         'name' => $tool['name'],
-                        'description' => ($tool['description'] ?? 'MCP tool')." (Provided by {$server->name})",
+                        'description' => ($tool['description'] ?? $typeLabel)." (Provided by {$server->name})",
                         'parameters' => $parameters,
                     ],
                     'server_id' => $server->id,
+                    'is_internal' => $isInternal,
                 ];
             }
         }
 
         return $formattedTools;
+    }
+
+    /**
+     * Get a breakdown of active tools separated by internal tools and external MCP tools.
+     *
+     * @return array{internal: int, external_mcp: int, total: int}
+     */
+    public function getActiveToolsBreakdown(): array
+    {
+        $servers = McpServer::where('is_active', true)->get();
+        $internalCount = 0;
+        $externalMcpCount = 0;
+
+        foreach ($servers as $server) {
+            $tools = $server->tools_cache ?? [];
+            if (! is_array($tools)) {
+                continue;
+            }
+
+            $count = count(array_filter($tools, fn ($t) => ! empty($t['name'])));
+            if ($this->isBuiltInServer($server)) {
+                $internalCount += $count;
+            } else {
+                $externalMcpCount += $count;
+            }
+        }
+
+        // Fallback: If no internal tools server was registered in mcp_servers table yet,
+        // count the declared native internal tools from BuiltInToolsService
+        if ($internalCount === 0) {
+            $internalCount = count($this->builtInTools->getToolsDeclaration());
+        }
+
+        return [
+            'internal' => $internalCount,
+            'external_mcp' => $externalMcpCount,
+            'total' => $internalCount + $externalMcpCount,
+        ];
     }
 
     /**
@@ -630,11 +671,11 @@ class McpService
         if (! $targetServer) {
             return [
                 'success' => false,
-                'output' => "Error: Tool '{$toolName}' not found on any active MCP server.",
+                'output' => "Error: Tool '{$toolName}' not found on any active server.",
             ];
         }
 
-        // Direct execution for built-in MCP server tools
+        // Direct execution for native internal tools
         if ($this->isBuiltInServer($targetServer)) {
             return $this->builtInTools->execute($toolName, $arguments);
         }

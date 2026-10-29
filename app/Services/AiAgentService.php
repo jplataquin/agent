@@ -10,6 +10,7 @@ use App\Models\Skill;
 use App\Models\TokenMetric;
 use App\Services\Llm\LlmAdapterFactory;
 use Exception;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class AiAgentService
@@ -43,7 +44,7 @@ class AiAgentService
             }
         }
 
-        $promptParts[] = "\nWhen relevant, use the available tools connected via MCP to look up live internal data before responding. Never fabricate data from internal systems if a tool is available.
+        $promptParts[] = "\nWhen relevant, use the available internal tools and external MCP tools to look up live data before responding. Never fabricate data from internal systems if a tool is available.
 
 Important Tool Response Guidelines:
 - Tool execution results and tool JSON payloads are strictly for your internal reference.
@@ -158,7 +159,41 @@ Important Tool Response Guidelines:
             }
         };
 
+        $forcedWrapUp = false;
+
+        $checkCancellation = function () use ($session, $onChunk) {
+            if (Cache::pull('chat_cancel_'.$session->id)) {
+                $cancelText = '⚠️ *[Response generation cancelled by user]*';
+                if ($onChunk) {
+                    $onChunk($cancelText);
+                }
+                $cancelledMsg = ChatMessage::create([
+                    'chat_session_id' => $session->id,
+                    'role' => ChatMessage::ROLE_ASSISTANT,
+                    'content' => $cancelText,
+                ]);
+
+                return [
+                    'cancelled' => true,
+                    'content' => $cancelText,
+                    'message_id' => $cancelledMsg->id,
+                ];
+            }
+
+            return null;
+        };
+
         while ($maxIterations === null || $currentIteration < $maxIterations) {
+            if ($cancellationResult = $checkCancellation()) {
+                return $cancellationResult;
+            }
+
+            // Check if user requested early wrap-up
+            if (Cache::pull('chat_wrap_up_'.$session->id)) {
+                $forcedWrapUp = true;
+                break;
+            }
+
             $currentIteration++;
             $messages = $this->buildMessagesPayload($session);
 
@@ -201,6 +236,10 @@ Important Tool Response Guidelines:
                     ]);
 
                     foreach ($llmResponse->toolCalls as $toolCall) {
+                        if ($cancellationResult = $checkCancellation()) {
+                            return $cancellationResult;
+                        }
+
                         if ($onHeartbeat) {
                             $onHeartbeat();
                         }
@@ -221,6 +260,16 @@ Important Tool Response Guidelines:
                         if ($onHeartbeat) {
                             $onHeartbeat();
                         }
+                    }
+
+                    if ($cancellationResult = $checkCancellation()) {
+                        return $cancellationResult;
+                    }
+
+                    // Check if wrap-up was requested during tool execution
+                    if (Cache::pull('chat_wrap_up_'.$session->id)) {
+                        $forcedWrapUp = true;
+                        break;
                     }
 
                     // If max limit is defined and reached, break loop to force final synthesis
@@ -260,9 +309,16 @@ Important Tool Response Guidelines:
             }
         }
 
-        // Tool execution limit reached: force final synthesis turn with tools disabled
+        if ($cancellationResult = $checkCancellation()) {
+            return $cancellationResult;
+        }
+
+        // Tool execution limit reached or early wrap-up requested: force final synthesis turn with tools disabled
         $messages = $this->buildMessagesPayload($session);
-        $synthesisPrompt = $systemPrompt."\n\nNotice: Maximum tool execution limit reached. Provide a comprehensive final answer to the user synthesizing all information gathered from the tools above. Do not attempt to call any more tools.";
+        $reasonNotice = $forcedWrapUp
+            ? "Notice: The user requested an early wrap-up. Synthesize all findings and tool outputs gathered so far into a concise, direct final response. Do not call any further tools."
+            : "Notice: Maximum tool execution limit reached. Provide a comprehensive final answer to the user synthesizing all information gathered from the tools above. Do not attempt to call any more tools.";
+        $synthesisPrompt = $systemPrompt."\n\n".$reasonNotice;
 
         try {
             if ($onHeartbeat) {

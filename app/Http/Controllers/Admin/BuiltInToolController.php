@@ -18,7 +18,7 @@ class BuiltInToolController extends Controller
     }
 
     /**
-     * Display the manual testing interface for built-in MCP tools.
+     * Display the manual testing interface for native internal tools.
      */
     public function index(): View
     {
@@ -28,7 +28,7 @@ class BuiltInToolController extends Controller
     }
 
     /**
-     * Execute a built-in MCP tool call manually.
+     * Execute an internal tool call manually.
      */
     public function test(Request $request): JsonResponse
     {
