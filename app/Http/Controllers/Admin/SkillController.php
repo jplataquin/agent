@@ -45,6 +45,42 @@ class SkillController extends Controller
         return view('admin.skills.edit', compact('skill'));
     }
 
+    public function preview(Request $request, Skill $skill)
+    {
+        $name = (string) $request->input('name', $skill->name);
+        $description = (string) $request->input('description', $skill->description);
+        $instructions = (string) $request->input('instructions', $skill->instructions);
+
+        $markdown = $this->buildSkillMarkdown($name, $description, $instructions);
+
+        return view('admin.skills.preview', compact('skill', 'name', 'description', 'instructions', 'markdown'));
+    }
+
+    protected function buildSkillMarkdown(?string $name, ?string $description, ?string $instructions): string
+    {
+        $name = trim((string) $name);
+        $description = trim((string) $description);
+        $instructions = trim((string) $instructions);
+
+        $parts = [];
+
+        // If instructions do not start with a top-level header (# ...), include the title
+        if ($name !== '' && ! preg_match('/^#\s+/m', $instructions)) {
+            $parts[] = "# {$name}";
+        }
+
+        // Include description as blockquote if provided and not already included in instructions
+        if ($description !== '' && ! str_contains($instructions, $description)) {
+            $parts[] = "> {$description}";
+        }
+
+        if ($instructions !== '') {
+            $parts[] = $instructions;
+        }
+
+        return implode("\n\n", $parts);
+    }
+
     public function update(Request $request, Skill $skill)
     {
         $validated = $request->validate([
