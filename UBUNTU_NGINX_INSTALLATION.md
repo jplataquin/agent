@@ -541,6 +541,7 @@ Environment=NODE_ENV=production
 Environment=PORT=3030
 Environment=HOST=127.0.0.1
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=HOME=/tmp/playwright-agent-runtime
 Environment=PLAYWRIGHT_BROWSERS_PATH=/var/www/.cache/ms-playwright
 ExecStart=/usr/local/bin/node /var/www/agent/playwright-server/server.js
 Restart=always

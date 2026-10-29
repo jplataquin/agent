@@ -1,4 +1,6 @@
 import express from 'express';
+import fs from 'fs';
+import path from 'path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
@@ -31,22 +33,49 @@ async function getMcpClient() {
     isConnecting = true;
     try {
         const browserType = process.env.PLAYWRIGHT_BROWSER || 'chromium';
+        const runtimeDir = process.env.PLAYWRIGHT_RUNTIME_DIR || '/tmp/playwright-agent-runtime';
+
+        // Ensure writable directories for www-data or containerized environments
+        fs.mkdirSync(runtimeDir, { recursive: true });
+        const configPath = path.join(runtimeDir, 'mcp-config.json');
+
+        const config = {
+            browser: {
+                browserName: browserType,
+                isolated: true,
+                launchOptions: {
+                    headless: true,
+                    args: [
+                        '--no-sandbox',
+                        '--disable-setuid-sandbox',
+                        '--disable-dev-shm-usage',
+                        '--disable-gpu',
+                        '--disable-crash-reporter',
+                        '--disable-breakpad',
+                        '--disable-software-rasterizer',
+                    ],
+                },
+            },
+        };
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+
         const args = [
             'playwright-mcp',
-            '--headless',
-            '--no-sandbox',
-            '--browser', browserType,
+            '--config', configPath,
             '--allowed-hosts', '*',
         ];
 
-        console.log(`[Playwright MCP Bridge] Spawning official @playwright/mcp (${args.join(' ')})...`);
+        console.log(`[Playwright MCP Bridge] Spawning official @playwright/mcp with Linux VPS stability config...`);
 
         mcpTransport = new StdioClientTransport({
             command: 'npx',
             args: args,
             env: {
                 ...process.env,
-                PLAYWRIGHT_BROWSERS_PATH: process.env.PLAYWRIGHT_BROWSERS_PATH || undefined,
+                HOME: runtimeDir,
+                XDG_CONFIG_HOME: path.join(runtimeDir, '.config'),
+                XDG_CACHE_HOME: path.join(runtimeDir, '.cache'),
+                PLAYWRIGHT_BROWSERS_PATH: process.env.PLAYWRIGHT_BROWSERS_PATH || '/var/www/.cache/ms-playwright',
             },
         });
 
