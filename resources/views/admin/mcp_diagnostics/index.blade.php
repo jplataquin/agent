@@ -218,6 +218,14 @@
                         @endforeach
                     </ul>
 
+                    @if(isset($browser['checks']['chrome_testing_binary']) && $browser['checks']['chrome_testing_binary']['status'] !== 'ok')
+                        <div class="alert alert-warning border-0 rounded-3 p-3 mb-3 small">
+                            <div class="fw-bold mb-1"><i class="bi bi-exclamation-triangle-fill text-warning me-1"></i> Chrome for Testing Missing</div>
+                            <p class="mb-2 text-muted">The official Microsoft MCP engine requires the Chrome for Testing browser binary. Run this command on your server:</p>
+                            <pre class="bg-body p-2 rounded font-monospace small mb-0 user-select-all">sudo PLAYWRIGHT_BROWSERS_PATH=/var/www/.cache/ms-playwright npx @playwright/mcp install-browser chrome-for-testing && sudo chown -R www-data:www-data /var/www/.cache</pre>
+                        </div>
+                    @endif
+
                     @if($browser['server_reachable'] && !empty($browser['server_data']['browser']))
                         <div class="card bg-body-secondary border-0 rounded-3 p-3 mb-3">
                             <div class="small fw-semibold mb-1"><i class="bi bi-speedometer me-1 text-primary"></i>Live Browser Context</div>
@@ -330,9 +338,11 @@
 sudo mkdir -p /var/www/.cache/ms-playwright
 sudo chown -R www-data:www-data /var/www/.cache
 
-# Install Chromium and required Linux system libraries
+# Install Linux system libraries and Chrome for Testing
 cd {{ base_path() }}
 sudo npx playwright install --with-deps chromium
+sudo PLAYWRIGHT_BROWSERS_PATH=/var/www/.cache/ms-playwright npx @playwright/mcp install-browser chrome-for-testing
+sudo chown -R www-data:www-data /var/www/.cache
                 </pre>
 
                 <h6 class="fw-bold small">2. Create service file <code>/etc/systemd/system/agent-browser.service</code>:</h6>

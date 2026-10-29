@@ -399,11 +399,12 @@ class McpDiagnosticsService
             $hasErrors = true;
         }
 
-        // 2. npm Packages (express and playwright)
+        // 2. npm Packages (express, playwright, and @playwright/mcp)
         $pkgPath = base_path('package.json');
         $hasPackageJson = file_exists($pkgPath);
         $expressVersion = null;
         $playwrightVersion = null;
+        $playwrightMcpVersion = null;
 
         $expressPkg = base_path('node_modules/express/package.json');
         if (file_exists($expressPkg)) {
@@ -415,6 +416,12 @@ class McpDiagnosticsService
         if (file_exists($playwrightPkg)) {
             $data = json_decode((string) file_get_contents($playwrightPkg), true);
             $playwrightVersion = $data['version'] ?? 'installed';
+        }
+
+        $playwrightMcpPkg = base_path('node_modules/@playwright/mcp/package.json');
+        if (file_exists($playwrightMcpPkg)) {
+            $data = json_decode((string) file_get_contents($playwrightMcpPkg), true);
+            $playwrightMcpVersion = $data['version'] ?? 'installed';
         }
 
         $checks['express_package'] = [
@@ -437,13 +444,26 @@ class McpDiagnosticsService
             $hasWarnings = true;
         }
 
-        // 3. Playwright Chromium Browser Binary
+        $checks['playwright_mcp_package'] = [
+            'name' => 'Playwright MCP Engine (npm)',
+            'status' => $playwrightMcpVersion ? 'ok' : 'warning',
+            'message' => $playwrightMcpVersion ? "Installed (v{$playwrightMcpVersion})" : 'Missing in node_modules (Run: npm install @playwright/mcp)',
+            'version' => $playwrightMcpVersion,
+        ];
+        if (! $playwrightMcpVersion) {
+            $hasWarnings = true;
+        }
+
+        // 3. Playwright Browser Binaries & Chrome for Testing
         $chromiumFound = false;
         $chromiumPath = null;
+        $chromeTestingFound = false;
+        $chromeTestingPath = null;
+
         $candidatePaths = array_filter([
             env('PLAYWRIGHT_BROWSERS_PATH'),
-            (getenv('HOME') ?: '/root').'/.cache/ms-playwright',
             '/var/www/.cache/ms-playwright',
+            (getenv('HOME') ?: '/root').'/.cache/ms-playwright',
             base_path('node_modules/playwright/.local-browsers'),
         ]);
 
@@ -454,7 +474,22 @@ class McpDiagnosticsService
                     if (str_starts_with($file, 'chromium-') || str_starts_with($file, 'chromium_headless_shell-')) {
                         $chromiumFound = true;
                         $chromiumPath = "{$dir}/{$file}";
-                        break 2;
+                    }
+
+                    // Look specifically for the Chrome for Testing executable required by @playwright/mcp
+                    if (str_starts_with($file, 'chromium-')) {
+                        $possibleExecutables = [
+                            "{$dir}/{$file}/chrome-linux64/chrome",
+                            "{$dir}/{$file}/chrome-win64/chrome.exe",
+                            "{$dir}/{$file}/chrome-mac/Chromium.app/Contents/MacOS/Chromium",
+                        ];
+                        foreach ($possibleExecutables as $execPath) {
+                            if (file_exists($execPath)) {
+                                $chromeTestingFound = true;
+                                $chromeTestingPath = $execPath;
+                                break;
+                            }
+                        }
                     }
                 }
             }
@@ -467,6 +502,18 @@ class McpDiagnosticsService
             'path' => $chromiumPath,
         ];
         if (! $chromiumFound) {
+            $hasWarnings = true;
+        }
+
+        $checks['chrome_testing_binary'] = [
+            'name' => 'Chrome for Testing (MCP Executable)',
+            'status' => $chromeTestingFound ? 'ok' : 'warning',
+            'message' => $chromeTestingFound
+                ? "Installed at {$chromeTestingPath}"
+                : 'Chrome for Testing executable missing! Run: sudo PLAYWRIGHT_BROWSERS_PATH=/var/www/.cache/ms-playwright npx @playwright/mcp install-browser chrome-for-testing',
+            'path' => $chromeTestingPath,
+        ];
+        if (! $chromeTestingFound) {
             $hasWarnings = true;
         }
 
@@ -543,8 +590,8 @@ class McpDiagnosticsService
             'server_reachable' => $serverReachable,
             'server_data' => $serverData,
             'remediation' => [
-                'install_deps' => 'sudo npx playwright install-deps chromium',
-                'install_browser' => 'PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install chromium',
+                'install_deps' => 'sudo npx playwright install --with-deps chromium',
+                'install_chrome_for_testing' => 'sudo PLAYWRIGHT_BROWSERS_PATH=/var/www/.cache/ms-playwright npx @playwright/mcp install-browser chrome-for-testing && sudo chown -R www-data:www-data /var/www/.cache',
                 'register_command' => 'php artisan mcp:register-playwright --sync',
                 'systemd_service' => 'sudo systemctl restart agent-browser.service',
             ],

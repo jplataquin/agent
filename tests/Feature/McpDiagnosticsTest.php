@@ -19,7 +19,24 @@ class McpDiagnosticsTest extends TestCase
 
     protected function setUp(): void
     {
+        $appPath = dirname(__DIR__, 2).'/app';
+        $rdi = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($appPath));
+        $classMap = [];
+        foreach ($rdi as $file) {
+            if ($file->isFile() && $file->getExtension() === 'php') {
+                $rel = substr($file->getPathname(), strlen($appPath));
+                $class = 'App'.str_replace('/', '\\', substr($rel, 0, -4));
+                $classMap[$class] = $file->getPathname();
+            }
+        }
+        $loader = require dirname(__DIR__, 2).'/vendor/autoload.php';
+        $loader->addClassMap($classMap);
+
         parent::setUp();
+
+        config(['view.paths' => [dirname(__DIR__, 2).'/resources/views']]);
+        app()->forgetInstance('view.finder');
+        \Illuminate\Support\Facades\View::clearResolvedInstances();
 
         $this->admin = User::factory()->create([
             'role' => 'admin',
@@ -200,6 +217,8 @@ class McpDiagnosticsTest extends TestCase
         $this->assertArrayHasKey('node_runtime', $browserChecks);
         $this->assertArrayHasKey('express_package', $browserChecks);
         $this->assertArrayHasKey('playwright_package', $browserChecks);
+        $this->assertArrayHasKey('playwright_mcp_package', $browserChecks);
         $this->assertArrayHasKey('chromium_binary', $browserChecks);
+        $this->assertArrayHasKey('chrome_testing_binary', $browserChecks);
     }
 }

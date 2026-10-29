@@ -497,7 +497,7 @@ Add the following line at the bottom:
 The platform includes full interactive headless web browsing powered by the official Microsoft `@playwright/mcp` library. It enables the AI agent to navigate pages, inspect elements via accessibility trees, type into forms, click buttons, and capture page states.
 
 ### 1. Install Chromium & OS Dependencies
-Headless Chromium requires several underlying Linux GUI and font libraries on Ubuntu:
+Headless Chromium requires several underlying Linux GUI and font libraries on Ubuntu, and the official `@playwright/mcp` library specifically requires **Chrome for Testing**:
 
 ```bash
 cd /var/www/agent
@@ -508,6 +508,12 @@ sudo chown -R www-data:www-data /var/www/.cache
 
 # Download Chromium binary and automatically install required Ubuntu system libraries
 sudo npx playwright install --with-deps chromium
+
+# Download the exact Chrome for Testing browser build into the shared cache directory
+sudo PLAYWRIGHT_BROWSERS_PATH=/var/www/.cache/ms-playwright npx @playwright/mcp install-browser chrome-for-testing
+
+# Ensure www-data owns the cache directory
+sudo chown -R www-data:www-data /var/www/.cache
 ```
 
 ### 2. Configure Systemd Service (`agent-browser.service`)
