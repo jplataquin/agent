@@ -1682,37 +1682,53 @@
 
     // 6. Editable User Prompts
     window.startEditUserPrompt = function(messageId) {
-        document.getElementById(`user-content-${messageId}`).parentElement.classList.add('d-none');
-        document.getElementById(`user-edit-box-${messageId}`).classList.remove('d-none');
+        const contentElem = document.getElementById(`user-content-${messageId}`);
+        const editBox = document.getElementById(`user-edit-box-${messageId}`);
+        if (contentElem && contentElem.parentElement) {
+            contentElem.parentElement.classList.add('d-none');
+        }
+        if (editBox) {
+            editBox.classList.remove('d-none');
+            const textarea = document.getElementById(`edit-textarea-${messageId}`);
+            if (textarea) {
+                textarea.focus();
+                textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+                if (!textarea.dataset.hasEnterHandler) {
+                    textarea.dataset.hasEnterHandler = 'true';
+                    textarea.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            window.submitEditUserPrompt(messageId);
+                        }
+                    });
+                }
+            }
+        }
     };
 
     window.cancelEditUserPrompt = function(messageId) {
-        document.getElementById(`user-content-${messageId}`).parentElement.classList.remove('d-none');
-        document.getElementById(`user-edit-box-${messageId}`).classList.add('d-none');
+        const contentElem = document.getElementById(`user-content-${messageId}`);
+        const editBox = document.getElementById(`user-edit-box-${messageId}`);
+        if (contentElem && contentElem.parentElement) {
+            contentElem.parentElement.classList.remove('d-none');
+        }
+        if (editBox) {
+            editBox.classList.add('d-none');
+        }
     };
 
     window.submitEditUserPrompt = function(messageId) {
-        const newText = document.getElementById(`edit-textarea-${messageId}`).value.trim();
+        const textarea = document.getElementById(`edit-textarea-${messageId}`);
+        const newText = textarea ? textarea.value.trim() : '';
         if (!newText) return;
 
-        const editUrl = `/chat/${sessionId}/messages/${messageId}`;
-        const typingIndicator = document.getElementById('typingIndicator');
-        typingIndicator.classList.remove('d-none');
+        // Revert the textarea back to its original bubble
+        window.cancelEditUserPrompt(messageId);
 
-        fetch(editUrl, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': csrfToken,
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify({ content: newText })
-        }).then(res => res.json()).then(data => {
-            location.reload();
-        }).catch(err => {
-            typingIndicator.classList.add('d-none');
-            window.showToast('Error updating message.', 'danger');
-        });
+        // Send the edited text as a new chat message at the bottom with streaming & counting timer
+        if (typeof window.submitMessage === 'function') {
+            window.submitMessage(newText);
+        }
     };
 
     // 8. Auto-scroll, Speech-to-Text & Chat Form Handling
@@ -1860,8 +1876,8 @@
             }
         }
 
-        function submitMessage() {
-            const text = input.value.trim();
+        function submitMessage(customText = null) {
+            const text = (customText !== null && customText !== undefined) ? customText.trim() : input.value.trim();
             if (!text) return;
 
             if (isListening && recognition) {
@@ -1877,12 +1893,43 @@
             if (emptyState) emptyState.classList.add('d-none');
 
             // Append User Message to UI
+            const newClientMsgId = 'user-msg-' + Date.now();
             const userRow = document.createElement('div');
             userRow.className = 'message-row user-row';
+            userRow.id = `msg-row-${newClientMsgId}`;
+
             const userBubble = document.createElement('div');
-            userBubble.className = 'message-bubble message-user';
-            userBubble.textContent = text;
+            userBubble.className = 'message-bubble message-user d-flex align-items-start gap-2';
+
+            const userContent = document.createElement('div');
+            userContent.className = 'user-content-text flex-grow-1';
+            userContent.id = `user-content-${newClientMsgId}`;
+            userContent.textContent = text;
+
+            const editBtn = document.createElement('button');
+            editBtn.className = 'btn btn-sm p-0 text-white user-edit-btn';
+            editBtn.title = 'Edit prompt';
+            editBtn.innerHTML = '<i class="bi bi-pencil-square"></i>';
+            editBtn.onclick = function() { window.startEditUserPrompt(newClientMsgId); };
+
+            userBubble.appendChild(userContent);
+            userBubble.appendChild(editBtn);
             userRow.appendChild(userBubble);
+
+            // Inline Edit Box
+            const editBox = document.createElement('div');
+            editBox.className = 'user-edit-box d-none w-75 mt-2';
+            editBox.id = `user-edit-box-${newClientMsgId}`;
+            editBox.innerHTML = `
+                <textarea class="form-control mb-2 rounded-3" id="edit-textarea-${newClientMsgId}" rows="2"></textarea>
+                <div class="d-flex justify-content-end gap-2">
+                    <button class="btn btn-sm btn-outline-secondary" onclick="cancelEditUserPrompt('${newClientMsgId}')">Cancel</button>
+                    <button class="btn btn-sm btn-primary" onclick="submitEditUserPrompt('${newClientMsgId}')">Update &amp; Send</button>
+                </div>
+            `;
+            editBox.querySelector('textarea').value = text;
+            userRow.appendChild(editBox);
+
             messagesContainer.insertBefore(userRow, typingIndicator);
             scrollToBottom();
 
@@ -2056,6 +2103,10 @@
                 }
             };
         }
+
+        // Expose submitMessage and scrollToBottom globally
+        window.submitMessage = submitMessage;
+        window.scrollToBottom = scrollToBottom;
 
         // Wire event listeners cleanly to submitMessage to eliminate native navigation aborts
         input.addEventListener('keydown', function (e) {

@@ -205,4 +205,21 @@ class ChatAdvancedFeaturesTest extends TestCase
         $response->assertSee('message-assistant markdown-body', false);
         $response->assertSee(e($latexContent), false);
     }
+
+    public function test_chat_view_renders_prompt_edit_and_send_handling()
+    {
+        $user = User::where('role', User::ROLE_REGULAR)->first();
+        $session = ChatSession::create([
+            'user_id' => $user->id,
+            'title' => 'Prompt Edit Chat',
+        ]);
+
+        $response = $this->actingAs($user)->get("/chat/{$session->id}");
+        $response->assertStatus(200);
+        $response->assertSee('window.startEditUserPrompt', false);
+        $response->assertSee('window.cancelEditUserPrompt', false);
+        $response->assertSee('window.submitEditUserPrompt', false);
+        $response->assertSee('window.submitMessage = submitMessage;', false);
+        $response->assertSee('window.scrollToBottom = scrollToBottom;', false);
+    }
 }
