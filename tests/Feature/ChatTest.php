@@ -520,4 +520,81 @@ class ChatTest extends TestCase
             'content' => 'Synthesized Answer: Bob is an Engineering Manager.',
         ]);
     }
+
+    public function test_agent_prompts_user_to_wrap_up_or_continue_when_limit_is_reached()
+    {
+        LlmProvider::query()->update(['is_default' => false]);
+        $provider = LlmProvider::create([
+            'name' => 'Prompt User Provider',
+            'provider_type' => 'gemini',
+            'api_key' => 'AIzaSyLimitTestingKey2',
+            'model' => 'gemini-1.5-flash',
+            'temperature' => 0.7,
+            'max_tool_iterations' => 1,
+            'is_default' => true,
+            'is_active' => true,
+        ]);
+
+        $user = User::where('role', User::ROLE_REGULAR)->first();
+        $session = ChatSession::create([
+            'user_id' => $user->id,
+            'title' => 'Limit Prompt Test Session',
+        ]);
+
+        $capturedPayloads = [];
+
+        Http::fake([
+            'https://generativelanguage.googleapis.com/*' => function (\Illuminate\Http\Client\Request $request) use (&$capturedPayloads) {
+                $data = $request->data();
+                $capturedPayloads[] = $data;
+
+                if (count($capturedPayloads) === 1) {
+                    return Http::response([
+                        'candidates' => [
+                            [
+                                'content' => [
+                                    'parts' => [
+                                        [
+                                            'functionCall' => [
+                                                'name' => 'internal_company_directory',
+                                                'args' => ['query' => 'Alice'],
+                                            ],
+                                        ],
+                                    ],
+                                    'role' => 'model',
+                                ],
+                            ],
+                        ],
+                        'usageMetadata' => ['promptTokenCount' => 30, 'candidatesTokenCount' => 10],
+                    ], 200);
+                }
+
+                return Http::response([
+                    'candidates' => [
+                        [
+                            'content' => [
+                                'parts' => [
+                                    ['text' => 'I have reached the limit. Should I wrap up or would you like me to continue?'],
+                                ],
+                                'role' => 'model',
+                            ],
+                        ],
+                    ],
+                    'usageMetadata' => ['promptTokenCount' => 50, 'candidatesTokenCount' => 15],
+                ], 200);
+            },
+        ]);
+
+        $response = $this->actingAs($user)->postJson("/chat/{$session->id}/message", [
+            'message' => 'Find info for Alice',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('ai_response.content', 'I have reached the limit. Should I wrap up or would you like me to continue?');
+
+        // Assert the second request contained the updated prompt notice asking the user
+        $this->assertCount(2, $capturedPayloads);
+        $systemInstructionText = $capturedPayloads[1]['systemInstruction']['parts'][0]['text'] ?? '';
+        $this->assertStringContainsString('Notice: Maximum tool execution limit reached. Please pause and ask the user if they would like you to wrap up the current task, or if they grant you permission to continue running with additional tool calls.', $systemInstructionText);
+    }
 }

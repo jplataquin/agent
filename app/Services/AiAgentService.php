@@ -317,7 +317,7 @@ Important Tool Response Guidelines:
         $messages = $this->buildMessagesPayload($session);
         $reasonNotice = $forcedWrapUp
             ? "Notice: The user requested an early wrap-up. Synthesize all findings and tool outputs gathered so far into a concise, direct final response. Do not call any further tools."
-            : "Notice: Maximum tool execution limit reached. Provide a comprehensive final answer to the user synthesizing all information gathered from the tools above. Do not attempt to call any more tools.";
+            : "Notice: Maximum tool execution limit reached. Please pause and ask the user if they would like you to wrap up the current task, or if they grant you permission to continue running with additional tool calls. Do not attempt to call any more tools in this response.";
         $synthesisPrompt = $systemPrompt."\n\n".$reasonNotice;
 
         try {
