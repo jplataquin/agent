@@ -227,7 +227,7 @@ class DiagnosePlaywrightCommand extends Command
     protected function checkSystemEnvironment(): array
     {
         $osRelease = $this->parseOsRelease();
-        $currentUser = get_current_user() ?: $this->executeShell('whoami');
+        $currentUser = $this->getProcessUser();
         $uid = function_exists('posix_geteuid') ? posix_geteuid() : null;
         $gid = function_exists('posix_getegid') ? posix_getegid() : null;
         $isRoot = ($uid === 0 || $currentUser === 'root');
@@ -295,7 +295,7 @@ class DiagnosePlaywrightCommand extends Command
             $this->allPassed = false;
         } elseif (! $homeWritable) {
             $this->crashpadIssues[] = "HOME directory '{$home}' is not writable by the current user. Crashpad fails when attempting to create ~/.config/Crashpad.";
-            $this->remediations[] = 'sudo chown -R '.(get_current_user() ?: 'www-data').':'.(get_current_user() ?: 'www-data')." {$home}";
+            $this->remediations[] = 'sudo chown -R '.($this->getProcessUser() ?: 'www-data').':'.($this->getProcessUser() ?: 'www-data')." {$home}";
             $homeIssue = true;
             $this->allPassed = false;
         }
@@ -355,7 +355,7 @@ class DiagnosePlaywrightCommand extends Command
 
             // Detect root ownership issues where www-data needs access
             $isRootOwned = ($owner === 'root' || $owner === '0');
-            $currentUser = get_current_user();
+            $currentUser = $this->getProcessUser();
 
             if ($exists && ! $writable) {
                 $this->crashpadIssues[] = "Path '{$path}' exists but is not writable (Permissions: {$perms}, Owner: {$owner}:{$group}).";
@@ -632,11 +632,19 @@ class DiagnosePlaywrightCommand extends Command
         $exists = file_exists($serverJsPath);
         $hasDisableCrashpad = false;
         $hasCrashDumpsDir = false;
+        $hasUserDataDirArg = false;
 
         if ($exists) {
             $content = (string) @file_get_contents($serverJsPath);
             $hasDisableCrashpad = str_contains($content, '--disable-crashpad');
             $hasCrashDumpsDir = str_contains($content, '--crash-dumps-dir');
+            $hasUserDataDirArg = str_contains($content, '--user-data-dir');
+
+            if ($hasUserDataDirArg) {
+                $this->crashpadIssues[] = "playwright-server/server.js contains '--user-data-dir' in launchOptions.args. Playwright explicitly forbids this argument in launch() and throws 'Error: async initializeServer' (_createUserDataDirArgMisuseError).";
+                $this->remediations[] = "Remove '--user-data-dir' from launchOptions.args in playwright-server/server.js and restart the service.";
+                $this->allPassed = false;
+            }
         }
 
         return [
@@ -644,6 +652,7 @@ class DiagnosePlaywrightCommand extends Command
             'exists' => $exists,
             'has_disable_crashpad_flag' => $hasDisableCrashpad,
             'has_crash_dumps_dir_flag' => $hasCrashDumpsDir,
+            'has_user_data_dir_arg' => $hasUserDataDirArg,
         ];
     }
 
@@ -886,12 +895,16 @@ JS;
 
         // Playwright Bridge Config
         $bridge = $this->report['bridge_config'];
-        $bridgeStatus = ($bridge['has_disable_crashpad_flag'] && $bridge['has_crash_dumps_dir_flag']) ? '<info>PASS</info>' : '<comment>WARN</comment>';
+        $bridgeOk = $bridge['has_disable_crashpad_flag'] && $bridge['has_crash_dumps_dir_flag'] && ! ($bridge['has_user_data_dir_arg'] ?? false);
+        $bridgeStatus = $bridgeOk ? '<info>PASS</info>' : '<comment>WARN</comment>';
+        $bridgeNote = ($bridge['has_user_data_dir_arg'] ?? false)
+            ? 'Conflict: --user-data-dir in args'
+            : 'Crashpad flags configured';
         $rows[] = [
             'Bridge Script Config',
             $bridge['exists'] ? 'playwright-server/server.js' : 'Missing',
             $bridgeStatus,
-            'Crashpad flags configured',
+            $bridgeNote,
         ];
 
         // Server Daemon
@@ -1084,5 +1097,25 @@ JS;
 
         // 5. Default to user's daemon service name: agent-prod-browser
         return 'agent-prod-browser';
+    }
+
+    /**
+     * Resolve the actual operating system user executing the command.
+     */
+    protected function getProcessUser(): string
+    {
+        if (function_exists('posix_geteuid') && function_exists('posix_getpwuid')) {
+            $user = posix_getpwuid(posix_geteuid());
+            if (! empty($user['name'])) {
+                return $user['name'];
+            }
+        }
+
+        $whoami = $this->executeShell('whoami');
+        if (! empty($whoami)) {
+            return trim($whoami);
+        }
+
+        return get_current_user() ?: 'unknown';
     }
 }

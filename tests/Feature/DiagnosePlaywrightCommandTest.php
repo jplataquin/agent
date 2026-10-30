@@ -48,6 +48,7 @@ class DiagnosePlaywrightCommandTest extends TestCase
         // Verify bridge_config flags
         $this->assertTrue($data['bridge_config']['has_disable_crashpad_flag']);
         $this->assertTrue($data['bridge_config']['has_crash_dumps_dir_flag']);
+        $this->assertFalse($data['bridge_config']['has_user_data_dir_arg']);
     }
 
     public function test_playwright_diagnose_fix_flag_creates_runtime_directories()

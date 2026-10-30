@@ -63,7 +63,6 @@ async function getMcpClient() {
                         '--disable-breakpad',
                         '--disable-crashpad',
                         `--crash-dumps-dir=${crashDumpsDir}`,
-                        `--user-data-dir=${userDataDir}`,
                         '--disable-software-rasterizer',
                     ],
                 },
