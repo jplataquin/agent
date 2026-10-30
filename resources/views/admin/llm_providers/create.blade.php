@@ -102,6 +102,11 @@
                     <label class="form-check-label fw-semibold" for="isDefaultSwitch">Set as Default AI Provider (Chat Agent will use this immediately)</label>
                 </div>
 
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" role="switch" name="is_router" id="isRouterSwitch" value="1" {{ old('is_router') ? 'checked' : '' }}>
+                    <label class="form-check-label fw-semibold" for="isRouterSwitch">Set as Classifier Router (Used to classify simple vs complex prompts)</label>
+                </div>
+
                 <div class="form-check form-switch mb-4">
                     <input class="form-check-input" type="checkbox" role="switch" name="is_active" id="isActiveSwitch" value="1" {{ old('is_active', true) ? 'checked' : '' }}>
                     <label class="form-check-label fw-semibold" for="isActiveSwitch">Enable this Provider</label>

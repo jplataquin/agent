@@ -36,6 +36,7 @@ class LlmProviderController extends Controller
             'max_tool_iterations' => 'nullable|integer|min:1',
             'wrap_up_timeout' => 'nullable|integer|min:1',
             'is_default' => 'sometimes|boolean',
+            'is_router' => 'sometimes|boolean',
             'is_active' => 'sometimes|boolean',
         ]);
 
@@ -44,7 +45,13 @@ class LlmProviderController extends Controller
             LlmProvider::query()->update(['is_default' => false]);
         }
 
+        $isRouter = $request->has('is_router');
+        if ($isRouter) {
+            LlmProvider::query()->update(['is_router' => false]);
+        }
+
         $validated['is_default'] = $isDefault;
+        $validated['is_router'] = $isRouter;
         $validated['is_active'] = $request->has('is_active');
 
         if ($validated['provider_type'] === 'gemini') {
@@ -86,6 +93,7 @@ class LlmProviderController extends Controller
             'max_tool_iterations' => 'nullable|integer|min:1',
             'wrap_up_timeout' => 'nullable|integer|min:1',
             'is_default' => 'sometimes|boolean',
+            'is_router' => 'sometimes|boolean',
             'is_active' => 'sometimes|boolean',
         ]);
 
@@ -94,7 +102,13 @@ class LlmProviderController extends Controller
             LlmProvider::where('id', '!=', $llmProvider->id)->update(['is_default' => false]);
         }
 
+        $isRouter = $request->has('is_router');
+        if ($isRouter) {
+            LlmProvider::where('id', '!=', $llmProvider->id)->update(['is_router' => false]);
+        }
+
         $validated['is_default'] = $isDefault;
+        $validated['is_router'] = $isRouter;
         $validated['is_active'] = $request->has('is_active');
 
         if ($validated['provider_type'] === 'gemini') {
@@ -124,6 +138,14 @@ class LlmProviderController extends Controller
         $llmProvider->update(['is_default' => true, 'is_active' => true]);
 
         return back()->with('success', "LLM Provider '{$llmProvider->name}' is now set as default.");
+    }
+
+    public function setRouter(LlmProvider $llmProvider)
+    {
+        LlmProvider::query()->update(['is_router' => false]);
+        $llmProvider->update(['is_router' => true, 'is_active' => true]);
+
+        return back()->with('success', "LLM Provider '{$llmProvider->name}' is now set as the Classifier Router.");
     }
 
     public function testConnection(LlmProvider $llmProvider)

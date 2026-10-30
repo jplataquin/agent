@@ -108,6 +108,11 @@
                     <label class="form-check-label fw-semibold" for="isDefaultSwitch">Default Provider for Chat Agent</label>
                 </div>
 
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" role="switch" name="is_router" id="isRouterSwitch" value="1" {{ old('is_router', $provider->is_router) ? 'checked' : '' }}>
+                    <label class="form-check-label fw-semibold" for="isRouterSwitch">Set as Classifier Router (Used to classify simple vs complex prompts)</label>
+                </div>
+
                 <div class="form-check form-switch mb-4">
                     <input class="form-check-input" type="checkbox" role="switch" name="is_active" id="isActiveSwitch" value="1" {{ old('is_active', $provider->is_active) ? 'checked' : '' }}>
                     <label class="form-check-label fw-semibold" for="isActiveSwitch">Provider is Active</label>

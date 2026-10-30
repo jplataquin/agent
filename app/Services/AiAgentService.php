@@ -120,14 +120,16 @@ Important Tool Response Guidelines:
      */
     public function generateResponse(ChatSession $session, ?callable $onChunk = null, ?callable $onHeartbeat = null): array
     {
-        $provider = LlmProvider::getDefault();
+        $defaultProvider = LlmProvider::getDefault();
 
-        if (! $provider) {
+        if (! $defaultProvider) {
             return [
                 'error' => 'No active LLM Provider configured. Please contact the administrator.',
                 'content' => 'Error: No active LLM provider found. Please configure an LLM provider in the Admin Console.',
             ];
         }
+
+        $provider = $this->routeModel($session, $defaultProvider);
 
         // Maximum tool call limit configured by admin; if not defined (null or <= 0), there is no limit.
         $maxIterations = ($provider->max_tool_iterations !== null && $provider->max_tool_iterations > 0)
@@ -457,5 +459,42 @@ Important Tool Response Guidelines:
         }
 
         return implode("\n\n", $lines);
+    }
+
+    /**
+     * Determine the appropriate model provider for the given user prompt.
+     */
+    protected function routeModel(ChatSession $session, LlmProvider $defaultProvider): LlmProvider
+    {
+        $router = LlmProvider::getRouter();
+        if (! $router || $router->id === $defaultProvider->id) {
+            return $defaultProvider;
+        }
+
+        $lastUserMessage = $session->messages()->where('role', ChatMessage::ROLE_USER)->latest()->first();
+        if (! $lastUserMessage || empty(trim($lastUserMessage->content))) {
+            return $defaultProvider;
+        }
+
+        try {
+            $routerAdapter = $this->adapterFactory->make($router);
+            $classificationPrompt = "You are an AI router. Determine if the user's latest request requires complex reasoning, deep multi-step analysis, coding, or internal tool/system usage. Respond with ONLY 'COMPLEX' or 'SIMPLE'.";
+            $messages = [
+                ['role' => 'user', 'content' => 'User Prompt: '.$lastUserMessage->content],
+            ];
+
+            $response = $routerAdapter->send($router, $classificationPrompt, $messages, []);
+            $verdict = strtoupper(trim($response->content ?? ''));
+
+            if (str_contains($verdict, 'COMPLEX')) {
+                return $defaultProvider;
+            }
+
+            return $router;
+        } catch (\Throwable $e) {
+            Log::warning('Model routing classification failed, falling back to default provider: '.$e->getMessage());
+
+            return $defaultProvider;
+        }
     }
 }

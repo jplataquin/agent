@@ -96,6 +96,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('llm-providers/fetch-models', [LlmProviderController::class, 'fetchModels'])->name('llm-providers.fetch-models');
     Route::resource('llm-providers', LlmProviderController::class);
     Route::post('llm-providers/{llm_provider}/set-default', [LlmProviderController::class, 'setDefault'])->name('llm-providers.set-default');
+    Route::post('llm-providers/{llm_provider}/set-router', [LlmProviderController::class, 'setRouter'])->name('llm-providers.set-router');
     Route::post('llm-providers/{llm_provider}/test', [LlmProviderController::class, 'testConnection'])->name('llm-providers.test');
     Route::get('llm-providers/{llm_provider}/logs', [LlmProviderController::class, 'logs'])->name('llm-providers.logs');
     Route::delete('llm-providers/{llm_provider}/logs', [LlmProviderController::class, 'clearLogs'])->name('llm-providers.logs.clear');

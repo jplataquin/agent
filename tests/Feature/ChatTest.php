@@ -597,4 +597,167 @@ class ChatTest extends TestCase
         $systemInstructionText = $capturedPayloads[1]['systemInstruction']['parts'][0]['text'] ?? '';
         $this->assertStringContainsString('Notice: Maximum tool execution limit reached. Please pause and ask the user if they would like you to wrap up the current task, or if they grant you permission to continue running with additional tool calls.', $systemInstructionText);
     }
+
+    public function test_model_router_routes_simple_prompt_to_cheap_model()
+    {
+        LlmProvider::query()->update(['is_default' => false, 'is_router' => false]);
+
+        $defaultProvider = LlmProvider::create([
+            'name' => 'Complex Model Provider',
+            'provider_type' => 'gemini',
+            'api_key' => 'AIzaSyComplexKey',
+            'model' => 'gemini-1.5-pro',
+            'temperature' => 0.7,
+            'is_default' => true,
+            'is_active' => true,
+        ]);
+
+        $routerProvider = LlmProvider::create([
+            'name' => 'Cheap Router Provider',
+            'provider_type' => 'gemini',
+            'api_key' => 'AIzaSyRouterKey',
+            'model' => 'gemini-1.5-flash',
+            'temperature' => 0.1,
+            'is_router' => true,
+            'is_active' => true,
+        ]);
+
+        $user = User::where('role', User::ROLE_REGULAR)->first();
+        $session = ChatSession::create([
+            'user_id' => $user->id,
+            'title' => 'Routing Session',
+        ]);
+
+        $usedKeys = [];
+
+        Http::fake([
+            'https://generativelanguage.googleapis.com/*' => function (\Illuminate\Http\Client\Request $request) use (&$usedKeys) {
+                // Extract API key from query parameter
+                $url = $request->url();
+                parse_str(parse_url($url, PHP_URL_QUERY), $queryParams);
+                $usedKeys[] = $queryParams['key'] ?? 'unknown';
+
+                if (count($usedKeys) === 1) {
+                    // First call: Router model classifies prompt as SIMPLE
+                    return Http::response([
+                        'candidates' => [
+                            [
+                                'content' => [
+                                    'parts' => [['text' => 'SIMPLE']],
+                                ],
+                                'role' => 'model',
+                            ],
+                        ],
+                        'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 2],
+                    ], 200);
+                }
+
+                // Second call: Generation handled by the cheap router model
+                return Http::response([
+                    'candidates' => [
+                        [
+                            'content' => [
+                                'parts' => [['text' => 'Hello! I am the cheap model answering your simple question.']],
+                                ],
+                                'role' => 'model',
+                            ],
+                        ],
+                        'usageMetadata' => ['promptTokenCount' => 20, 'candidatesTokenCount' => 10],
+                    ], 200);
+            },
+        ]);
+
+        $response = $this->actingAs($user)->postJson("/chat/{$session->id}/message", [
+            'message' => 'Hi, what is 2+2?',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('ai_response.content', 'Hello! I am the cheap model answering your simple question.');
+
+        // Both calls should have hit the router's API key because it was classified as SIMPLE
+        $this->assertCount(2, $usedKeys);
+        $this->assertEquals('AIzaSyRouterKey', $usedKeys[0]);
+        $this->assertEquals('AIzaSyRouterKey', $usedKeys[1]);
+    }
+
+    public function test_model_router_routes_complex_prompt_to_default_model()
+    {
+        LlmProvider::query()->update(['is_default' => false, 'is_router' => false]);
+
+        $defaultProvider = LlmProvider::create([
+            'name' => 'Complex Model Provider',
+            'provider_type' => 'gemini',
+            'api_key' => 'AIzaSyComplexKey',
+            'model' => 'gemini-1.5-pro',
+            'temperature' => 0.7,
+            'is_default' => true,
+            'is_active' => true,
+        ]);
+
+        $routerProvider = LlmProvider::create([
+            'name' => 'Cheap Router Provider',
+            'provider_type' => 'gemini',
+            'api_key' => 'AIzaSyRouterKey',
+            'model' => 'gemini-1.5-flash',
+            'temperature' => 0.1,
+            'is_router' => true,
+            'is_active' => true,
+        ]);
+
+        $user = User::where('role', User::ROLE_REGULAR)->first();
+        $session = ChatSession::create([
+            'user_id' => $user->id,
+            'title' => 'Complex Routing Session',
+        ]);
+
+        $usedKeys = [];
+
+        Http::fake([
+            'https://generativelanguage.googleapis.com/*' => function (\Illuminate\Http\Client\Request $request) use (&$usedKeys) {
+                $url = $request->url();
+                parse_str(parse_url($url, PHP_URL_QUERY), $queryParams);
+                $usedKeys[] = $queryParams['key'] ?? 'unknown';
+
+                if (count($usedKeys) === 1) {
+                    // First call: Router classifies prompt as COMPLEX
+                    return Http::response([
+                        'candidates' => [
+                            [
+                                'content' => [
+                                    'parts' => [['text' => 'COMPLEX']],
+                                ],
+                                'role' => 'model',
+                            ],
+                        ],
+                        'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 2],
+                    ], 200);
+                }
+
+                // Second call: Generation handled by the complex default model
+                return Http::response([
+                    'candidates' => [
+                        [
+                            'content' => [
+                                'parts' => [['text' => 'I am the powerful complex model with deep analysis.']],
+                                ],
+                                'role' => 'model',
+                            ],
+                        ],
+                        'usageMetadata' => ['promptTokenCount' => 50, 'candidatesTokenCount' => 20],
+                    ], 200);
+            },
+        ]);
+
+        $response = $this->actingAs($user)->postJson("/chat/{$session->id}/message", [
+            'message' => 'Analyze the financial trends of Q3 with statistical forecasting.',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('ai_response.content', 'I am the powerful complex model with deep analysis.');
+
+        // First call used the router key; second call used the complex model key
+        $this->assertCount(2, $usedKeys);
+        $this->assertEquals('AIzaSyRouterKey', $usedKeys[0]);
+        $this->assertEquals('AIzaSyComplexKey', $usedKeys[1]);
+    }
 }

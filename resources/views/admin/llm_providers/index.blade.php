@@ -21,6 +21,7 @@
                         <th>Type</th>
                         <th>Model</th>
                         <th>Default</th>
+                        <th>Router</th>
                         <th>Status</th>
                         <th class="text-end pe-3">Actions</th>
                     </tr>
@@ -42,6 +43,18 @@
                                         @csrf
                                         <button type="submit" class="btn btn-sm btn-outline-secondary rounded-pill py-0 px-2 small">
                                             Set Default
+                                        </button>
+                                    </form>
+                                @endif
+                            </td>
+                            <td>
+                                @if($provider->is_router)
+                                    <span class="badge bg-info text-dark">Classifier Router</span>
+                                @else
+                                    <form action="{{ route('admin.llm-providers.set-router', $provider) }}" method="POST" class="d-inline">
+                                        @csrf
+                                        <button type="submit" class="btn btn-sm btn-outline-info rounded-pill py-0 px-2 small">
+                                            Set Router
                                         </button>
                                     </form>
                                 @endif
