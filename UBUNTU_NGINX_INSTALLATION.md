@@ -574,6 +574,16 @@ cd /var/www/agent
 php artisan mcp:register-playwright --sync
 ```
 
+6. Run the Playwright & Crashpad Diagnostic Tool:
+
+```bash
+# Run comprehensive environment, permissions, crashpad, and binary diagnostics:
+php artisan playwright:diagnose
+
+# Or run with automated runtime directory/permissions fix:
+php artisan playwright:diagnose --fix
+```
+
 ---
 
 ## Step 15: Secure with SSL (Let's Encrypt / Certbot)

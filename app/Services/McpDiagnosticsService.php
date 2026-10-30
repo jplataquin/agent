@@ -553,12 +553,16 @@ class McpDiagnosticsService
             $serverReachable = false;
         }
 
+        $systemdService = config('services.playwright.systemd_service')
+            ?: env('PLAYWRIGHT_SYSTEMD_SERVICE')
+            ?: (file_exists('/etc/systemd/system/agent-prod-browser.service') ? 'agent-prod-browser.service' : 'agent-browser.service');
+
         $checks['server_daemon'] = [
             'name' => 'Playwright Server Daemon',
             'status' => $serverReachable ? 'ok' : 'warning',
             'message' => $serverReachable
                 ? "Active on {$healthEndpoint} ({$serverLatencyMs}ms latency, v".($serverData['version'] ?? '1.0.0').')'
-                : "Offline / Unreachable on {$healthEndpoint} (Start via systemd: sudo systemctl start agent-browser.service)",
+                : "Offline / Unreachable on {$healthEndpoint} (Start via systemd: sudo systemctl start {$systemdService})",
             'endpoint' => $healthEndpoint,
             'latency_ms' => $serverLatencyMs,
             'details' => $serverData,
@@ -593,7 +597,7 @@ class McpDiagnosticsService
                 'install_deps' => 'sudo npx playwright install --with-deps chromium',
                 'install_chrome_for_testing' => 'sudo PLAYWRIGHT_BROWSERS_PATH=/var/www/.cache/ms-playwright npx @playwright/mcp install-browser chrome-for-testing && sudo chown -R www-data:www-data /var/www/.cache',
                 'register_command' => 'php artisan mcp:register-playwright --sync',
-                'systemd_service' => 'sudo systemctl restart agent-browser.service',
+                'systemd_service' => "sudo systemctl restart {$systemdService}",
             ],
         ];
     }

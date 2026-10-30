@@ -34,9 +34,18 @@ async function getMcpClient() {
     try {
         const browserType = process.env.PLAYWRIGHT_BROWSER || 'chromium';
         const runtimeDir = process.env.PLAYWRIGHT_RUNTIME_DIR || '/tmp/playwright-agent-runtime';
+        const crashDumpsDir = path.join(runtimeDir, 'crash_dumps');
+        const configDir = path.join(runtimeDir, '.config');
+        const cacheDir = path.join(runtimeDir, '.cache');
+        const userDataDir = path.join(runtimeDir, 'user-data');
 
         // Ensure writable directories for www-data or containerized environments
         fs.mkdirSync(runtimeDir, { recursive: true });
+        fs.mkdirSync(crashDumpsDir, { recursive: true });
+        fs.mkdirSync(configDir, { recursive: true });
+        fs.mkdirSync(cacheDir, { recursive: true });
+        fs.mkdirSync(userDataDir, { recursive: true });
+
         const configPath = path.join(runtimeDir, 'mcp-config.json');
 
         const config = {
@@ -52,6 +61,9 @@ async function getMcpClient() {
                         '--disable-gpu',
                         '--disable-crash-reporter',
                         '--disable-breakpad',
+                        '--disable-crashpad',
+                        `--crash-dumps-dir=${crashDumpsDir}`,
+                        `--user-data-dir=${userDataDir}`,
                         '--disable-software-rasterizer',
                     ],
                 },
@@ -73,8 +85,9 @@ async function getMcpClient() {
             env: {
                 ...process.env,
                 HOME: runtimeDir,
-                XDG_CONFIG_HOME: path.join(runtimeDir, '.config'),
-                XDG_CACHE_HOME: path.join(runtimeDir, '.cache'),
+                XDG_CONFIG_HOME: configDir,
+                XDG_CACHE_HOME: cacheDir,
+                TMPDIR: runtimeDir,
                 PLAYWRIGHT_BROWSERS_PATH: process.env.PLAYWRIGHT_BROWSERS_PATH || '/var/www/.cache/ms-playwright',
             },
         });
