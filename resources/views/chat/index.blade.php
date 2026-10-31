@@ -250,7 +250,7 @@
         font-size: 0.75rem;
         font-family: monospace;
     }
-    .copy-code-btn {
+    .copy-code-btn, .code-header-btn {
         background: transparent;
         border: none;
         color: #a6adc8;
@@ -262,9 +262,52 @@
         padding: 2px 6px;
         border-radius: 4px;
     }
-    .copy-code-btn:hover {
+    .copy-code-btn:hover, .code-header-btn:hover {
         background: rgba(255,255,255,0.1);
         color: #fff;
+    }
+
+    /* JSON Tree Viewer */
+    .json-tree-container {
+        padding: 12px;
+        background: #1e1e2e;
+        color: #cdd6f4;
+        font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 0.85em;
+        line-height: 1.5;
+        overflow-x: auto;
+    }
+    .json-tree-container ul {
+        list-style: none;
+        padding-left: 20px;
+        margin: 0;
+        border-left: 1px dashed rgba(255,255,255,0.15);
+    }
+    .json-tree-toggle {
+        cursor: pointer;
+        display: inline-block;
+        width: 14px;
+        text-align: center;
+        font-weight: bold;
+        color: #9399b2;
+        user-select: none;
+    }
+    .json-tree-toggle:hover {
+        color: #89b4fa;
+    }
+    .json-key { color: #f38ba8; }
+    .json-string { color: #a6e3a1; }
+    .json-number { color: #fab387; }
+    .json-boolean { color: #f9e2af; }
+    .json-null { color: #f38ba8; font-style: italic; }
+    .json-hidden { display: none !important; }
+    .json-tree-preview {
+        color: #9399b2;
+        font-style: italic;
+        cursor: pointer;
+    }
+    .json-tree-preview:hover {
+        text-decoration: underline;
     }
     .message-assistant pre {
         margin: 0;
@@ -1509,6 +1552,51 @@
     let activeAccumulatedContent = '';
     let isCurrentTurnCancelled = false;
 
+    // JSON Tree Helpers
+    window.toggleJsonTree = function(el) {
+        const isCollapsed = el.textContent === '▶';
+        el.textContent = isCollapsed ? '▼' : '▶';
+        const container = el.parentNode;
+        const list = container.querySelector(':scope > .json-list');
+        const preview = container.querySelector(':scope > .json-tree-preview');
+        if (list) list.classList.toggle('json-hidden', !isCollapsed);
+        if (preview) preview.classList.toggle('json-hidden', isCollapsed);
+    };
+
+    function generateJsonTree(obj) {
+        const escapeStr = (str) => {
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        };
+        if (obj === null) return '<span class="json-null">null</span>';
+        if (typeof obj === 'string') return '<span class="json-string">"' + escapeStr(obj) + '"</span>';
+        if (typeof obj === 'number') return '<span class="json-number">' + obj + '</span>';
+        if (typeof obj === 'boolean') return '<span class="json-boolean">' + obj + '</span>';
+        
+        if (Array.isArray(obj)) {
+            if (obj.length === 0) return '[]';
+            let html = '<span class="json-tree-toggle" onclick="toggleJsonTree(this)">▼</span> [<span class="json-tree-preview json-hidden" onclick="toggleJsonTree(this.previousElementSibling)"> ' + obj.length + ' items </span><ul class="json-list">';
+            for (let i = 0; i < obj.length; i++) {
+                let isLast = i === obj.length - 1;
+                html += '<li>' + generateJsonTree(obj[i]) + (isLast ? '' : ',') + '</li>';
+            }
+            html += '</ul>]';
+            return html;
+        }
+        
+        if (typeof obj === 'object') {
+            const keys = Object.keys(obj);
+            if (keys.length === 0) return '{}';
+            let html = '<span class="json-tree-toggle" onclick="toggleJsonTree(this)">▼</span> {<span class="json-tree-preview json-hidden" onclick="toggleJsonTree(this.previousElementSibling)"> ... </span><ul class="json-list">';
+            for (let i = 0; i < keys.length; i++) {
+                let isLast = i === keys.length - 1;
+                html += '<li><span class="json-key">"' + escapeStr(keys[i]) + '"</span>: ' + generateJsonTree(obj[keys[i]]) + (isLast ? '' : ',') + '</li>';
+            }
+            html += '</ul>}';
+            return html;
+        }
+        return escapeStr(String(obj));
+    }
+
     // 1. Markdown Rendering & Syntax Highlighting with "Copy Code" button
     function renderMarkdown(element) {
         if (!element) return;
@@ -1525,6 +1613,20 @@
 
         // Apply syntax highlighting and copy code buttons to all <pre><code> blocks
         element.querySelectorAll('pre code').forEach((block) => {
+            const lang = (block.className.match(/language-(\w+)/) || [, 'code'])[1];
+            
+            let isJson = false;
+            let jsonHtml = '';
+            if (lang === 'json') {
+                try {
+                    const jsonObj = JSON.parse(block.innerText);
+                    jsonHtml = '<div class="json-tree-container">' + generateJsonTree(jsonObj) + '</div>';
+                    isJson = true;
+                } catch (e) {
+                    isJson = false;
+                }
+            }
+
             hljs.highlightElement(block);
 
             const pre = block.parentElement;
@@ -1532,25 +1634,57 @@
                 const wrapper = document.createElement('div');
                 wrapper.className = 'code-block-wrapper';
 
-                const lang = (block.className.match(/language-(\w+)/) || [, 'code'])[1];
-
                 const header = document.createElement('div');
                 header.className = 'code-header';
-                header.innerHTML = `<span>${lang}</span><button class="copy-code-btn" type="button"><i class="bi bi-clipboard"></i> Copy code</button>`;
+                
+                let toggleHtml = '';
+                if (isJson) {
+                    toggleHtml = '<button class="code-header-btn json-toggle-btn" type="button" data-state="tree"><i class="bi bi-file-earmark-code"></i> <span>View Raw</span></button>';
+                }
+
+                header.innerHTML = `<span>${lang}</span><div class="d-flex align-items-center gap-1">${toggleHtml}<button class="copy-code-btn" type="button"><i class="bi bi-clipboard"></i> <span>Copy code</span></button></div>`;
 
                 const copyBtn = header.querySelector('.copy-code-btn');
                 copyBtn.addEventListener('click', function() {
                     navigator.clipboard.writeText(block.innerText).then(() => {
-                        copyBtn.innerHTML = '<i class="bi bi-check2 text-success"></i> Copied!';
+                        copyBtn.innerHTML = '<i class="bi bi-check2 text-success"></i> <span>Copied!</span>';
                         setTimeout(() => {
-                            copyBtn.innerHTML = '<i class="bi bi-clipboard"></i> Copy code';
+                            copyBtn.innerHTML = '<i class="bi bi-clipboard"></i> <span>Copy code</span>';
                         }, 2000);
                     });
                 });
 
                 pre.parentNode.insertBefore(wrapper, pre);
                 wrapper.appendChild(header);
-                wrapper.appendChild(pre);
+
+                if (isJson) {
+                    const treeContainer = document.createElement('div');
+                    treeContainer.className = 'json-tree-wrapper';
+                    treeContainer.innerHTML = jsonHtml;
+                    wrapper.appendChild(treeContainer);
+
+                    const rawContainer = document.createElement('div');
+                    rawContainer.className = 'json-raw-wrapper json-hidden';
+                    rawContainer.appendChild(pre);
+                    wrapper.appendChild(rawContainer);
+
+                    const toggleBtn = header.querySelector('.json-toggle-btn');
+                    toggleBtn.addEventListener('click', function() {
+                        if (this.getAttribute('data-state') === 'tree') {
+                            treeContainer.classList.add('json-hidden');
+                            rawContainer.classList.remove('json-hidden');
+                            this.setAttribute('data-state', 'raw');
+                            this.innerHTML = '<i class="bi bi-diagram-3"></i> <span>View Tree</span>';
+                        } else {
+                            treeContainer.classList.remove('json-hidden');
+                            rawContainer.classList.add('json-hidden');
+                            this.setAttribute('data-state', 'tree');
+                            this.innerHTML = '<i class="bi bi-file-earmark-code"></i> <span>View Raw</span>';
+                        }
+                    });
+                } else {
+                    wrapper.appendChild(pre);
+                }
             }
         });
     }
