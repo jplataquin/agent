@@ -325,40 +325,6 @@
         });
     </script>
 
-    <!-- Bootstrap 5.3 Bundle (Includes Popper & all Data-API plugins) -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
-    <!-- Fail-safe Mobile Navbar Burger Handler -->
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const toggler = document.querySelector('.navbar-toggler');
-            const targetId = toggler ? toggler.getAttribute('data-bs-target') : '#navbarSupportedContent';
-            const collapseEl = document.querySelector(targetId);
-
-            if (toggler && collapseEl) {
-                toggler.addEventListener('click', function(e) {
-                    if (window.bootstrap && window.bootstrap.Collapse) {
-                        try {
-                            const inst = window.bootstrap.Collapse.getOrCreateInstance(collapseEl, { toggle: false });
-                            inst.toggle();
-                            e.preventDefault();
-                        } catch (err) {
-                            collapseEl.classList.toggle('show');
-                            const isExpanded = collapseEl.classList.contains('show');
-                            toggler.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
-                            toggler.classList.toggle('collapsed', !isExpanded);
-                        }
-                    } else {
-                        collapseEl.classList.toggle('show');
-                        const isExpanded = collapseEl.classList.contains('show');
-                        toggler.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
-                        toggler.classList.toggle('collapsed', !isExpanded);
-                    }
-                });
-            }
-        });
-    </script>
-
     <!-- Markdown Parser & Highlight.js -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
