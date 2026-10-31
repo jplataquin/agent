@@ -28,7 +28,9 @@ class PwaTest extends TestCase
         $this->assertNotEmpty($manifest['short_name'] ?? null);
         $this->assertEquals('/', substr($manifest['start_url'] ?? '', 0, 1));
         $this->assertEquals('/', $manifest['scope'] ?? null);
-        $this->assertEquals('standalone', $manifest['display'] ?? null);
+        $this->assertEquals('fullscreen', $manifest['display'] ?? null);
+        $this->assertIsArray($manifest['display_override'] ?? null);
+        $this->assertEquals('fullscreen', $manifest['display_override'][0] ?? null);
         $this->assertNotEmpty($manifest['theme_color'] ?? null);
         $this->assertNotEmpty($manifest['background_color'] ?? null);
         $this->assertIsArray($manifest['icons'] ?? null);
@@ -94,6 +96,7 @@ class PwaTest extends TestCase
 
         // Manifest & iOS meta tags
         $this->assertStringContainsString('rel="manifest"', $content);
+        $this->assertStringContainsString('viewport-fit=cover', $content);
         $this->assertStringContainsString('name="theme-color"', $content);
         $this->assertStringContainsString('name="mobile-web-app-capable"', $content);
         $this->assertStringContainsString('name="apple-mobile-web-app-capable"', $content);
@@ -104,6 +107,8 @@ class PwaTest extends TestCase
 
         // PWA install buttons and toast
         $this->assertStringContainsString('pwa-install-btn', $content);
+        $this->assertStringContainsString('fullscreen-toggle-btn', $content);
+        $this->assertStringContainsString('navigationUI', $content);
         $this->assertStringContainsString('pwaInstallToast', $content);
         $this->assertStringContainsString('pwaOfflineToast', $content);
     }

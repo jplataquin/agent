@@ -2,7 +2,7 @@
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" data-bs-theme="light">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 
     <!-- CSRF Token -->
     <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -52,13 +52,19 @@
         body {
             font-family: 'Inter', sans-serif;
             min-height: 100vh;
+            min-height: 100dvh;
             display: flex;
             flex-direction: column;
+            padding-top: env(safe-area-inset-top, 0px);
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+            padding-left: env(safe-area-inset-left, 0px);
+            padding-right: env(safe-area-inset-right, 0px);
         }
         #app {
             display: flex;
             flex-direction: column;
             min-height: 100vh;
+            min-height: 100dvh;
         }
         main {
             flex: 1;
@@ -139,6 +145,10 @@
                     <button class="btn btn-sm btn-outline-primary rounded-circle pwa-install-btn d-none" type="button" title="Install App" aria-label="Install App">
                         <i class="bi bi-download"></i>
                     </button>
+                    <!-- Mobile Fullscreen Toggle -->
+                    <button class="btn btn-sm btn-outline-secondary rounded-circle fullscreen-toggle-btn" type="button" title="Toggle Fullscreen" aria-label="Toggle Fullscreen">
+                        <i class="bi bi-fullscreen fullscreen-icon"></i>
+                    </button>
                     <!-- Mobile Dark Mode Toggle -->
                     <button class="btn btn-sm btn-outline-secondary rounded-circle theme-toggle-btn" type="button" title="Toggle Dark/Light Mode">
                         <i class="bi bi-moon-stars theme-icon"></i>
@@ -193,6 +203,14 @@
                             <button class="btn btn-sm btn-outline-primary rounded-pill px-2 py-1 pwa-install-btn d-flex align-items-center gap-1" type="button" title="Install App">
                                 <i class="bi bi-download"></i>
                                 <span class="small fw-semibold">Install App</span>
+                            </button>
+                        </li>
+
+                        <!-- Desktop Fullscreen Toggle -->
+                        <li class="nav-item d-none d-md-block">
+                            <button class="btn btn-sm btn-outline-secondary rounded-pill px-2 py-1 fullscreen-toggle-btn d-flex align-items-center gap-1" type="button" title="Toggle Fullscreen">
+                                <i class="bi bi-fullscreen fullscreen-icon"></i>
+                                <span class="small fullscreen-label">Fullscreen</span>
                             </button>
                         </li>
 
@@ -567,11 +585,75 @@
 
             // 2. Install Prompt Handling
             let deferredPrompt = null;
-            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
+                                 window.matchMedia('(display-mode: fullscreen)').matches ||
+                                 window.matchMedia('(display-mode: minimal-ui)').matches ||
+                                 window.navigator.standalone === true;
 
             const installButtons = document.querySelectorAll('.pwa-install-btn');
             const desktopNavContainer = document.getElementById('pwaInstallNavDesktop');
             const toastEl = document.getElementById('pwaInstallToast');
+
+            // 3. Fullscreen Controller (hides Android System Gesture Navigation Bar)
+            const fullscreenBtns = document.querySelectorAll('.fullscreen-toggle-btn');
+            const fullscreenIcons = document.querySelectorAll('.fullscreen-icon');
+            const fullscreenLabels = document.querySelectorAll('.fullscreen-label');
+
+            function isDocFullscreen() {
+                return Boolean(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+            }
+
+            function updateFullscreenUI() {
+                const isFs = isDocFullscreen();
+                fullscreenIcons.forEach(icon => {
+                    icon.className = isFs ? 'bi bi-fullscreen-exit fullscreen-icon' : 'bi bi-fullscreen fullscreen-icon';
+                });
+                fullscreenLabels.forEach(lbl => {
+                    lbl.textContent = isFs ? 'Exit Full' : 'Fullscreen';
+                });
+                fullscreenBtns.forEach(btn => {
+                    btn.setAttribute('title', isFs ? 'Exit Fullscreen' : 'Toggle Fullscreen');
+                });
+            }
+
+            function toggleFullscreen() {
+                if (!isDocFullscreen()) {
+                    const el = document.documentElement;
+                    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+                    if (req) {
+                        // navigationUI: 'hide' specifically instructs Chromium/Android to suppress system gesture and navigation bars
+                        req.call(el, { navigationUI: 'hide' }).catch(() => {
+                            req.call(el).catch(err => console.warn('[PWA] Fullscreen request failed:', err));
+                        });
+                    }
+                } else {
+                    const exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+                    if (exit) {
+                        exit.call(document).catch(err => console.warn('[PWA] Exit fullscreen failed:', err));
+                    }
+                }
+            }
+
+            fullscreenBtns.forEach(btn => {
+                btn.addEventListener('click', toggleFullscreen);
+            });
+
+            ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(evt => {
+                document.addEventListener(evt, updateFullscreenUI);
+            });
+
+            // If browser does not support fullscreen API, gracefully hide the toggles
+            const supportsFullscreen = Boolean(document.fullscreenEnabled || document.webkitFullscreenEnabled || document.mozFullScreenEnabled || document.msFullscreenEnabled);
+            if (!supportsFullscreen) {
+                fullscreenBtns.forEach(btn => {
+                    const parentLi = btn.closest('li.nav-item');
+                    if (parentLi) {
+                        parentLi.classList.add('d-none');
+                    } else {
+                        btn.classList.add('d-none');
+                    }
+                });
+            }
 
             function showInstallUI() {
                 if (isStandalone) return;

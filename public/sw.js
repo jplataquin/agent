@@ -1,4 +1,4 @@
-const CACHE_NAME = 'company-ai-agent-v1.0.0';
+const CACHE_NAME = 'company-ai-agent-v1.0.1';
 
 // Assets to pre-cache on service worker installation
 const PRECACHE_ASSETS = [

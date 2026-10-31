@@ -281,7 +281,7 @@
     .chat-input-area {
         background: #ffffff;
         border-top: 1px solid #e2e8f0;
-        padding: 14px 18px;
+        padding: 14px 18px calc(14px + env(safe-area-inset-bottom, 0px)) 18px;
         flex-shrink: 0;
     }
 
