@@ -26,11 +26,36 @@ class ChatController extends Controller
     {
         $user = Auth::user();
         $sessions = $user->chatSessions()
+            ->where(function ($q) {
+                $q->where('updated_at', '>=', now()->subHours(12))
+                  ->orWhere('is_pinned', true);
+            })
             ->orderByDesc('is_pinned')
             ->orderByDesc('updated_at')
             ->get();
 
         $activeSession = $sessions->first();
+
+        // 5-minute inactivity rule: Auto-create a new session if the most recent is too old
+        // Or if there are no sessions at all. 
+        // We ensure the old session actually has messages to avoid creating infinite empty sessions on refresh.
+        if (! $activeSession || ($activeSession->messages()->count() > 0 && $activeSession->updated_at < now()->subMinutes(5))) {
+            $activeSession = ChatSession::create([
+                'user_id' => $user->id,
+                'title' => 'New Chat',
+            ]);
+            
+            // Re-fetch to ensure correct ordering (e.g. if there are pinned sessions)
+            $sessions = $user->chatSessions()
+                ->where(function ($q) {
+                    $q->where('updated_at', '>=', now()->subHours(12))
+                      ->orWhere('is_pinned', true);
+                })
+                ->orderByDesc('is_pinned')
+                ->orderByDesc('updated_at')
+                ->get();
+        }
+
         $activeProvider = LlmProvider::getDefault();
 
         return view('chat.index', compact('sessions', 'activeSession', 'activeProvider'));
@@ -46,6 +71,10 @@ class ChatController extends Controller
         }
 
         $sessions = Auth::user()->chatSessions()
+            ->where(function ($q) {
+                $q->where('updated_at', '>=', now()->subHours(12))
+                  ->orWhere('is_pinned', true);
+            })
             ->orderByDesc('is_pinned')
             ->orderByDesc('updated_at')
             ->get();

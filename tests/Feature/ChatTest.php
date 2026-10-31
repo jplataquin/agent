@@ -760,4 +760,98 @@ class ChatTest extends TestCase
         $this->assertEquals('AIzaSyRouterKey', $usedKeys[0]);
         $this->assertEquals('AIzaSyComplexKey', $usedKeys[1]);
     }
+
+    public function test_dormant_chat_sessions_are_hidden_from_user_ui()
+    {
+        $user = User::where('role', User::ROLE_REGULAR)->first();
+
+        // Active recent session (1 hour ago)
+        $recentSession = ChatSession::create([
+            'user_id' => $user->id,
+            'title' => 'Recent Active Session',
+        ]);
+        \Illuminate\Support\Facades\DB::table('chat_sessions')
+            ->where('id', $recentSession->id)
+            ->update(['updated_at' => now()->subHour()]);
+
+        // Dormant session (13 hours ago)
+        $dormantSession = ChatSession::create([
+            'user_id' => $user->id,
+            'title' => 'Dormant Old Session',
+        ]);
+        \Illuminate\Support\Facades\DB::table('chat_sessions')
+            ->where('id', $dormantSession->id)
+            ->update(['updated_at' => now()->subHours(13)]);
+
+        // Dormant but pinned session (15 hours ago)
+        $pinnedDormantSession = ChatSession::create([
+            'user_id' => $user->id,
+            'title' => 'Pinned Old Session',
+            'is_pinned' => true,
+        ]);
+        \Illuminate\Support\Facades\DB::table('chat_sessions')
+            ->where('id', $pinnedDormantSession->id)
+            ->update(['updated_at' => now()->subHours(15)]);
+
+        $response = $this->actingAs($user)->get('/chat');
+        $response->assertStatus(200);
+
+        $sessions = $response->viewData('sessions');
+        $this->assertTrue($sessions->contains('id', $recentSession->id));
+        $this->assertTrue($sessions->contains('id', $pinnedDormantSession->id));
+        $this->assertFalse($sessions->contains('id', $dormantSession->id));
+    }
+
+    public function test_inactivity_for_more_than_five_minutes_creates_new_session_on_index()
+    {
+        $user = User::where('role', User::ROLE_REGULAR)->first();
+
+        $session = ChatSession::create([
+            'user_id' => $user->id,
+            'title' => 'Previous Conversation',
+        ]);
+        \Illuminate\Support\Facades\DB::table('chat_sessions')
+            ->where('id', $session->id)
+            ->update(['updated_at' => now()->subMinutes(10)]);
+
+        // Add a message so it qualifies as having content
+        ChatMessage::create([
+            'chat_session_id' => $session->id,
+            'role' => 'user',
+            'content' => 'Hello from 10 minutes ago',
+        ]);
+
+        // Visiting /chat should see the old session is inactive > 5 mins and create a new session
+        $response = $this->actingAs($user)->get('/chat');
+        $response->assertStatus(200);
+
+        $activeSession = $response->viewData('activeSession');
+        $this->assertNotNull($activeSession);
+        $this->assertNotEquals($session->id, $activeSession->id);
+        $this->assertEquals('New Chat', $activeSession->title);
+    }
+
+    public function test_reopening_older_session_via_show_continues_as_is()
+    {
+        $user = User::where('role', User::ROLE_REGULAR)->first();
+
+        $session = ChatSession::create([
+            'user_id' => $user->id,
+            'title' => 'Old Inactive Conversation',
+            'updated_at' => now()->subMinutes(15),
+        ]);
+
+        ChatMessage::create([
+            'chat_session_id' => $session->id,
+            'role' => 'user',
+            'content' => 'Old message',
+        ]);
+
+        // Accessing the session directly should NOT auto-create a new one
+        $response = $this->actingAs($user)->get("/chat/{$session->id}");
+        $response->assertStatus(200);
+
+        $activeSession = $response->viewData('activeSession');
+        $this->assertEquals($session->id, $activeSession->id);
+    }
 }
