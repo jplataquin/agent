@@ -1297,6 +1297,31 @@
     // Active session ID tracker
     window.activeChatSessionId = {{ $activeSession ? $activeSession->id : 'null' }};
 
+    // Frontend Inactivity Tracker (5-minute rule on focus)
+    (function() {
+        let lastActivityTime = Date.now();
+        const updateActivityTime = () => { lastActivityTime = Date.now(); };
+        
+        document.addEventListener('keydown', updateActivityTime, { passive: true });
+        document.addEventListener('click', updateActivityTime, { passive: true });
+        
+        const checkInactivity = () => {
+            const isIndexRoute = {{ request()->routeIs('chat.index') ? 'true' : 'false' }};
+            if (isIndexRoute && window.activeChatSessionId && (Date.now() - lastActivityTime > 5 * 60 * 1000)) {
+                // Ensure the session actually has messages before auto-refreshing to avoid looping on empty sessions
+                const hasMessages = document.querySelectorAll('#chatMessages .message-row').length > 0;
+                if (hasMessages) {
+                    window.location.href = '{{ route("chat.index") }}';
+                }
+            }
+        };
+        
+        window.addEventListener('focus', checkInactivity);
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') checkInactivity();
+        });
+    })();
+
     window.updateSessionListVisibility = function () {
         const pinnedRows = document.querySelectorAll('#sessionListDesktop .session-pinned');
         const regularRows = document.querySelectorAll('#sessionListDesktop .session-regular');
