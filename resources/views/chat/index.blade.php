@@ -21,6 +21,12 @@
         z-index: 10;
         flex-shrink: 0;
     }
+    .chat-header-chip {
+        max-width: 220px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
     .chat-body {
         flex: 1 1 0%;
         min-height: 0;
@@ -421,6 +427,16 @@
             border-right: none !important;
             border-bottom: none !important;
         }
+        .chat-header {
+            padding: 8px 10px !important;
+            gap: 6px;
+        }
+        .chat-header-title {
+            max-width: 105px !important;
+        }
+        .chat-header-chip {
+            max-width: 100px !important;
+        }
         .chat-sidebar {
             position: absolute;
             top: 0;
@@ -687,32 +703,34 @@
 
         <!-- Chat Top Header Bar -->
         <div class="chat-header d-flex align-items-center justify-content-between p-2 p-md-3">
-            <div class="d-flex align-items-center gap-2">
+            <div class="d-flex align-items-center gap-2" style="min-width: 0; flex: 1 1 auto;">
                 <!-- Single Unified Sidebar Toggle Button -->
-                <button class="btn btn-outline-secondary btn-sm rounded-pill d-inline-flex align-items-center gap-1" id="toggleSidebarBtn" type="button" title="Show Sidebar" aria-label="Show Sidebar" aria-expanded="false">
+                <button class="btn btn-outline-secondary btn-sm rounded-pill d-inline-flex align-items-center gap-1 flex-shrink-0" id="toggleSidebarBtn" type="button" title="Show Sidebar" aria-label="Show Sidebar" aria-expanded="false">
                     <i class="bi bi-layout-sidebar" id="toggleSidebarIcon"></i>
                     <span class="small d-none d-lg-inline" id="toggleSidebarText">Sidebar</span>
                 </button>
 
-                <div>
-                    <div class="d-flex align-items-center gap-2">
-                        <h6 class="fw-bold mb-0 text-truncate" style="max-width: 280px;" id="activeHeaderTitle">
+                <div class="d-flex flex-column justify-content-center" style="min-width: 0; flex: 1 1 auto;">
+                    <div class="d-flex align-items-center gap-1 gap-sm-2 flex-nowrap" style="min-width: 0;">
+                        <h6 class="fw-bold mb-0 text-truncate chat-header-title" style="max-width: 240px; min-width: 0; flex-shrink: 1;" id="activeHeaderTitle">
                             {{ $activeSession ? $activeSession->title : 'Company AI Agent' }}
                         </h6>
                         @if(isset($activeProvider) && $activeProvider)
-                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle font-monospace" style="font-size: 0.72rem;" title="Active Provider: {{ $activeProvider->name }}">
-                                <i class="bi bi-cpu me-1"></i> {{ $activeProvider->name }} ({{ $activeProvider->model }})
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle font-monospace chat-header-chip text-truncate d-inline-flex align-items-center flex-shrink-0" style="font-size: 0.72rem;" title="Active Provider: {{ $activeProvider->name }} ({{ $activeProvider->model }})">
+                                <i class="bi bi-cpu me-1 flex-shrink-0"></i>
+                                <span class="text-truncate d-none d-sm-inline">{{ $activeProvider->name }} ({{ $activeProvider->model }})</span>
+                                <span class="text-truncate d-sm-none">{{ $activeProvider->model ?: $activeProvider->name }}</span>
                             </span>
                         @else
-                            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle" style="font-size: 0.72rem;">
-                                <i class="bi bi-exclamation-triangle me-1"></i> No Active LLM
+                            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle chat-header-chip text-truncate flex-shrink-0" style="font-size: 0.72rem;" title="No active LLM provider configured">
+                                <i class="bi bi-exclamation-triangle me-1"></i> <span class="d-none d-sm-inline">No Active LLM</span><span class="d-sm-none">No LLM</span>
                             </span>
                         @endif
                     </div>
                     @php
                         $toolsBreakdown = app(\App\Services\McpService::class)->getActiveToolsBreakdown();
                     @endphp
-                    <small class="text-muted d-block" style="font-size: 0.75rem;">
+                    <small class="text-muted d-block text-truncate" style="font-size: 0.75rem; min-width: 0;">
                         @if($toolsBreakdown['external_mcp'] > 0 && $toolsBreakdown['internal'] > 0)
                             <i class="bi bi-shield-check text-success me-1"></i> {{ $toolsBreakdown['internal'] }} Internal &amp; {{ $toolsBreakdown['external_mcp'] }} MCP {{ Str::plural('Tool', $toolsBreakdown['external_mcp']) }} Connected
                         @elseif($toolsBreakdown['internal'] > 0)
@@ -726,15 +744,15 @@
                 </div>
             </div>
 
-            <div class="d-flex align-items-center gap-2">
+            <div class="d-flex align-items-center gap-1 gap-sm-2 flex-shrink-0 ms-2">
                 <!-- Auto-read Responses (TTS) Toggle -->
-                <div class="form-check form-switch d-inline-flex align-items-center gap-1 mb-0 me-1" title="Automatically read new responses aloud">
+                <div class="form-check form-switch d-inline-flex align-items-center gap-1 mb-0 flex-shrink-0" title="Automatically read new responses aloud">
                     <input class="form-check-input mt-0" type="checkbox" role="switch" id="autoTtsToggle" style="cursor: pointer;">
                     <label class="form-check-label small text-muted user-select-none d-none d-sm-inline" for="autoTtsToggle" style="cursor: pointer; font-size: 0.78rem;">
                         <i class="bi bi-volume-up"></i> Auto-read
                     </label>
                     <label class="form-check-label small text-muted user-select-none d-sm-none" for="autoTtsToggle" style="cursor: pointer;" title="Auto-read aloud">
-                        <i class="bi bi-volume-up"></i>
+                        <i class="bi bi-volume-up fs-6"></i>
                     </label>
                 </div>
 
@@ -743,7 +761,7 @@
                         <i class="bi bi-gear"></i> <span class="small">Providers</span>
                     </a>
                 @endif
-                <form action="{{ route('chat.store') }}" method="POST" class="d-md-none">
+                <form action="{{ route('chat.store') }}" method="POST" class="d-md-none flex-shrink-0">
                     @csrf
                     <button type="submit" class="btn btn-sm btn-primary rounded-pill px-2" title="New Conversation">
                         <i class="bi bi-plus-lg"></i>
