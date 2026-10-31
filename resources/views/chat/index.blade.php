@@ -330,8 +330,13 @@
     .chat-input-area {
         background: #ffffff;
         border-top: 1px solid #e2e8f0;
-        padding: 14px 18px calc(14px + env(safe-area-inset-bottom, 0px)) 18px;
+        padding-top: 12px;
+        padding-left: 16px;
+        padding-right: 16px;
+        padding-bottom: max(14px, env(safe-area-inset-bottom, 14px), env(safe-area-max-inset-bottom, 14px));
         flex-shrink: 0;
+        position: relative;
+        z-index: 5;
     }
 
     /* Session List Item */
@@ -426,15 +431,18 @@
     @media (max-width: 767.98px) {
         /* Lock mobile page height and explicitly override desktop min-height: 100vh */
         html, body {
-            height: 100dvh !important;
-            min-height: 100dvh !important;
+            height: var(--app-height, 100svh) !important;
+            min-height: var(--app-height, 100svh) !important;
+            max-height: var(--app-height, 100svh) !important;
             overflow: hidden !important;
             margin: 0 !important;
             padding: 0 !important;
+            overscroll-behavior: none !important;
         }
         #app {
-            height: 100dvh !important;
-            min-height: 100dvh !important;
+            height: var(--app-height, 100svh) !important;
+            min-height: var(--app-height, 100svh) !important;
+            max-height: var(--app-height, 100svh) !important;
             display: flex !important;
             flex-direction: column !important;
             overflow: hidden !important;
@@ -469,6 +477,12 @@
             border-left: none !important;
             border-right: none !important;
             border-bottom: none !important;
+        }
+        .chat-input-area {
+            padding-top: 10px !important;
+            padding-left: 12px !important;
+            padding-right: 12px !important;
+            padding-bottom: max(14px, env(safe-area-inset-bottom, 14px), env(safe-area-max-inset-bottom, 14px)) !important;
         }
         .chat-header {
             padding: 8px 10px !important;
@@ -1842,13 +1856,20 @@
         const typingIndicator = document.getElementById('typingIndicator');
         typingIndicator.classList.remove('d-none');
 
+        const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.innerWidth <= 768);
+        const screenWidth = Math.round(window.innerWidth || (window.screen ? window.screen.width : 0));
+
         fetch(regenerateUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': csrfToken,
                 'Accept': 'application/json'
-            }
+            },
+            body: JSON.stringify({
+                is_mobile: isMobileDevice,
+                screen_width: screenWidth
+            })
         }).then(res => res.json()).then(data => {
             location.reload();
         }).catch(err => {
@@ -2126,7 +2147,10 @@
             activeAssistantBubble = null;
             activeAccumulatedContent = '';
 
-            const sseUrl = `${streamUrl}?message=${encodeURIComponent(text)}`;
+            const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.innerWidth <= 768);
+            const screenWidth = Math.round(window.innerWidth || (window.screen ? window.screen.width : 0));
+
+            const sseUrl = `${streamUrl}?message=${encodeURIComponent(text)}&is_mobile=${isMobileDevice ? '1' : '0'}&screen_width=${screenWidth}`;
             const eventSource = new EventSource(sseUrl);
             activeEventSource = eventSource;
 

@@ -11,7 +11,7 @@
 
     <!-- PWA Manifest & Meta Tags -->
     <link rel="manifest" href="{{ asset('manifest.json') }}">
-    <meta name="theme-color" content="#0d6efd" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -24,13 +24,25 @@
     <link rel="icon" type="image/png" sizes="16x16" href="{{ asset('icons/icon-16x16.png') }}">
     <link rel="apple-touch-icon" href="{{ asset('icons/apple-touch-icon.png') }}">
 
-    <!-- Immediate Theme Application Script (Prevents flash) -->
+    <!-- Immediate Theme & Dynamic Viewport Height Script (Prevents flash and mobile bar overlap) -->
     <script>
         (function() {
             const savedTheme = localStorage.getItem('company_ai_theme');
             const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
             const theme = savedTheme || (prefersDark ? 'dark' : 'light');
             document.documentElement.setAttribute('data-bs-theme', theme);
+
+            function updateAppHeight() {
+                const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+                document.documentElement.style.setProperty('--app-height', `${h}px`);
+            }
+            if (window.visualViewport) {
+                window.visualViewport.addEventListener('resize', updateAppHeight);
+                window.visualViewport.addEventListener('scroll', updateAppHeight);
+            }
+            window.addEventListener('resize', updateAppHeight);
+            window.addEventListener('orientationchange', updateAppHeight);
+            updateAppHeight();
         })();
     </script>
 
@@ -571,6 +583,9 @@
 
             function updateFullscreenUI() {
                 const isFs = isDocFullscreen();
+                if (isFs) {
+                    sessionStorage.setItem('company_ai_fullscreen', '1');
+                }
                 fullscreenIcons.forEach(icon => {
                     icon.className = isFs ? 'bi bi-fullscreen-exit fullscreen-icon' : 'bi bi-fullscreen fullscreen-icon';
                 });
@@ -588,16 +603,32 @@
                     const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
                     if (req) {
                         // navigationUI: 'hide' specifically instructs Chromium/Android to suppress system gesture and navigation bars
-                        req.call(el, { navigationUI: 'hide' }).catch(() => {
-                            req.call(el).catch(err => console.warn('[PWA] Fullscreen request failed:', err));
+                        req.call(el, { navigationUI: 'hide' }).then(() => {
+                            sessionStorage.setItem('company_ai_fullscreen', '1');
+                        }).catch(() => {
+                            req.call(el).then(() => {
+                                sessionStorage.setItem('company_ai_fullscreen', '1');
+                            }).catch(err => console.warn('[PWA] Fullscreen request failed:', err));
                         });
                     }
                 } else {
+                    sessionStorage.removeItem('company_ai_fullscreen');
                     const exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
                     if (exit) {
                         exit.call(document).catch(err => console.warn('[PWA] Exit fullscreen failed:', err));
                     }
                 }
+            }
+
+            // Restore fullscreen state on user's first touch if previously active
+            if (sessionStorage.getItem('company_ai_fullscreen') === '1') {
+                const restoreHandler = function() {
+                    if (sessionStorage.getItem('company_ai_fullscreen') === '1' && !isDocFullscreen()) {
+                        toggleFullscreen();
+                    }
+                };
+                document.addEventListener('pointerdown', restoreHandler, { once: true });
+                document.addEventListener('touchstart', restoreHandler, { once: true });
             }
 
             fullscreenBtns.forEach(btn => {

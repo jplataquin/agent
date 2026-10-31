@@ -854,4 +854,45 @@ class ChatTest extends TestCase
         $activeSession = $response->viewData('activeSession');
         $this->assertEquals($session->id, $activeSession->id);
     }
+
+    public function test_system_prompt_includes_mobile_guidelines_when_client_is_mobile()
+    {
+        $aiService = app(\App\Services\AiAgentService::class);
+
+        $prompt = $aiService->buildSystemPrompt([
+            'is_mobile' => true,
+            'screen_width' => 390,
+        ]);
+
+        $this->assertStringContainsString('mobile device (screen width: 390px)', $prompt);
+        $this->assertStringContainsString('refrain from responding with wide Markdown tables', $prompt);
+        $this->assertStringContainsString('vertical text format', $prompt);
+    }
+
+    public function test_system_prompt_omits_mobile_guidelines_when_client_is_desktop()
+    {
+        $aiService = app(\App\Services\AiAgentService::class);
+
+        $prompt = $aiService->buildSystemPrompt([
+            'is_mobile' => false,
+            'screen_width' => 1440,
+        ]);
+
+        $this->assertStringNotContainsString('mobile device', $prompt);
+        $this->assertStringNotContainsString('refrain from responding with wide Markdown tables', $prompt);
+    }
+
+    public function test_stream_endpoint_processes_mobile_context_parameters()
+    {
+        $user = User::where('role', User::ROLE_REGULAR)->first();
+        $session = ChatSession::create([
+            'user_id' => $user->id,
+            'title' => 'Mobile Streaming Test',
+        ]);
+
+        $response = $this->actingAs($user)->get("/chat/{$session->id}/stream?message=hello&is_mobile=1&screen_width=375");
+
+        $response->assertStatus(200);
+        $this->assertEquals('text/event-stream; charset=UTF-8', $response->headers->get('Content-Type'));
+    }
 }

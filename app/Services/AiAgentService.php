@@ -23,7 +23,7 @@ class AiAgentService
     /**
      * Assemble full system prompt from Master Prompt and Active Skills.
      */
-    public function buildSystemPrompt(): string
+    public function buildSystemPrompt(?array $clientContext = null): string
     {
         $promptParts = [];
 
@@ -50,6 +50,26 @@ Important Tool Response Guidelines:
 - Tool execution results and tool JSON payloads are strictly for your internal reference.
 - NEVER output raw JSON, JSON schemas, or raw tool response data in your chat response to the user.
 - Always synthesize the tool results into a friendly, clear, natural, and helpful answer in plain text or Markdown.";
+
+        // 3. Client Device Context & Formatting
+        if ($clientContext === null && app()->has('request')) {
+            $req = request();
+            $clientContext = [
+                'is_mobile' => $req->boolean('is_mobile', false) || $req->header('sec-ch-ua-mobile') === '?1' || (bool) preg_match('/Mobile|Android|iPhone|iPod/i', $req->userAgent() ?? ''),
+                'screen_width' => $req->filled('screen_width') ? (int) $req->input('screen_width') : null,
+            ];
+        }
+
+        $isMobile = $clientContext['is_mobile'] ?? false;
+        $screenWidth = $clientContext['screen_width'] ?? null;
+
+        if ($isMobile || ($screenWidth !== null && $screenWidth <= 768)) {
+            $widthInfo = $screenWidth ? " (screen width: {$screenWidth}px)" : '';
+            $promptParts[] = "\n## Client Device Context & Mobile Formatting Guidelines:
+The user is currently chatting on a mobile device{$widthInfo}.
+- Please refrain from responding with wide Markdown tables or horizontal Mermaid diagrams/tables, as they overflow narrow mobile screens and require awkward horizontal scrolling.
+- Instead, use a concise bulleted list, bold key-value pairs, or a vertical text format so it is clean, legible, and easy to read on a mobile screen.";
+        }
 
         return implode("\n\n", $promptParts);
     }
@@ -118,7 +138,7 @@ Important Tool Response Guidelines:
      * Send chat request to configured LLM Provider using the appropriate provider adapter.
      * Supports tool execution loop and streaming heartbeats.
      */
-    public function generateResponse(ChatSession $session, ?callable $onChunk = null, ?callable $onHeartbeat = null): array
+    public function generateResponse(ChatSession $session, ?callable $onChunk = null, ?callable $onHeartbeat = null, ?array $clientContext = null): array
     {
         $defaultProvider = LlmProvider::getDefault();
 
@@ -140,7 +160,7 @@ Important Tool Response Guidelines:
         $totalPromptTokens = 0;
         $totalCompletionTokens = 0;
 
-        $systemPrompt = $this->buildSystemPrompt();
+        $systemPrompt = $this->buildSystemPrompt($clientContext);
         $rawTools = $this->mcpService->getAllActiveTools();
         $adapter = $this->adapterFactory->make($provider);
 

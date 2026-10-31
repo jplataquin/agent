@@ -179,6 +179,26 @@ class ChatController extends Controller
     }
 
     /**
+     * Extract client device context (is_mobile and screen_width).
+     */
+    protected function extractClientContext(Request $request): array
+    {
+        $isMobileParam = $request->has('is_mobile') ? $request->boolean('is_mobile') : null;
+        $screenWidth = $request->filled('screen_width') ? (int) $request->input('screen_width') : null;
+
+        $isMobile = $isMobileParam ?? (
+            $request->header('sec-ch-ua-mobile') === '?1'
+            || ($screenWidth !== null && $screenWidth <= 768)
+            || (bool) preg_match('/Mobile|Android|iPhone|iPod/i', $request->userAgent() ?? '')
+        );
+
+        return [
+            'is_mobile' => $isMobile,
+            'screen_width' => $screenWidth,
+        ];
+    }
+
+    /**
      * Regenerate the latest assistant response.
      */
     public function regenerate(Request $request, ChatSession $session)
@@ -197,7 +217,7 @@ class ChatController extends Controller
         $session->messages()->where('id', '>', $lastUserMsg->id)->delete();
 
         try {
-            $response = $this->aiService->generateResponse($session);
+            $response = $this->aiService->generateResponse($session, null, null, $this->extractClientContext($request));
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('ChatController regenerate error: '.$e->getMessage(), ['exception' => $e]);
             $response = [
@@ -231,7 +251,7 @@ class ChatController extends Controller
         $session->messages()->where('id', '>', $message->id)->delete();
 
         try {
-            $response = $this->aiService->generateResponse($session);
+            $response = $this->aiService->generateResponse($session, null, null, $this->extractClientContext($request));
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('ChatController editMessage error: '.$e->getMessage(), ['exception' => $e]);
             $response = [
@@ -276,7 +296,7 @@ class ChatController extends Controller
         }
 
         try {
-            $response = $this->aiService->generateResponse($session);
+            $response = $this->aiService->generateResponse($session, null, null, $this->extractClientContext($request));
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('ChatController sendMessage error: '.$e->getMessage(), ['exception' => $e]);
             $response = [
@@ -319,7 +339,9 @@ class ChatController extends Controller
             }
         }
 
-        return new StreamedResponse(function () use ($session) {
+        $clientContext = $this->extractClientContext($request);
+
+        return new StreamedResponse(function () use ($session, $clientContext) {
             $isTesting = app()->runningUnitTests() || app()->environment('testing') || defined('PHPUNIT_RUNNING');
 
             // Disable all levels of output buffering and compression only when not in unit tests
@@ -367,7 +389,7 @@ class ChatController extends Controller
             };
 
             try {
-                $result = $this->aiService->generateResponse($session, $onChunk, $onHeartbeat);
+                $result = $this->aiService->generateResponse($session, $onChunk, $onHeartbeat, $clientContext);
             } catch (\Throwable $e) {
                 \Illuminate\Support\Facades\Log::error('ChatController stream error: '.$e->getMessage(), ['exception' => $e]);
                 $result = [
