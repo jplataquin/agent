@@ -632,6 +632,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 div.style[prop] = style[prop];
             });
 
+            const isFirefox = typeof window.InstallTrigger !== 'undefined';
+            if (isFirefox && element.scrollHeight > parseInt(style.height)) {
+                div.style.overflowY = 'scroll';
+            } else {
+                div.style.overflow = 'hidden';
+            }
+
             const text = element.value.substring(0, position);
             div.textContent = text;
 
@@ -640,11 +647,13 @@ document.addEventListener('DOMContentLoaded', function () {
             div.appendChild(span);
 
             document.body.appendChild(div);
+            
             const coordinates = {
-                top: span.offsetTop - element.scrollTop,
-                left: span.offsetLeft - element.scrollLeft,
-                height: parseInt(style.lineHeight) || 20
+                top: span.offsetTop + parseInt(style.borderTopWidth || 0) - element.scrollTop,
+                left: span.offsetLeft + parseInt(style.borderLeftWidth || 0) - element.scrollLeft,
+                height: parseInt(style.lineHeight) || span.offsetHeight || 20
             };
+            
             document.body.removeChild(div);
             return coordinates;
         }
@@ -654,16 +663,23 @@ document.addEventListener('DOMContentLoaded', function () {
             const rect = instructionsTextarea.getBoundingClientRect();
             const caret = getCaretCoordinates(instructionsTextarea, instructionsTextarea.selectionStart);
             const boxWidth = 330;
+            const boxMaxHeight = 270;
+            
             let left = rect.left + window.scrollX + caret.left;
             let top = rect.top + window.scrollY + caret.top + caret.height + 4;
 
-            if (left + boxWidth > window.innerWidth - 15) {
-                left = window.innerWidth - boxWidth - 15;
+            // Keep within viewport horizontally
+            if (left + boxWidth > window.innerWidth + window.scrollX - 15) {
+                left = window.innerWidth + window.scrollX - boxWidth - 15;
             }
-            if (left < 15) left = 15;
+            if (left < window.scrollX + 15) left = window.scrollX + 15;
 
-            if (top + 260 > window.innerHeight + window.scrollY) {
-                top = Math.max(10, rect.top + window.scrollY + caret.top - 265);
+            // Flip above cursor if it would clip the bottom of the viewport
+            if (top - window.scrollY + boxMaxHeight > window.innerHeight - 15) {
+                const spaceAbove = rect.top + caret.top;
+                if (spaceAbove > boxMaxHeight) {
+                    top = rect.top + window.scrollY + caret.top - boxMaxHeight - 4;
+                }
             }
 
             suggestionBox.style.left = `${left}px`;
