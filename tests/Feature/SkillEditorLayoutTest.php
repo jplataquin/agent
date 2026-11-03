@@ -52,13 +52,15 @@ class SkillEditorLayoutTest extends TestCase
         $response->assertSee('id="dragResizer"', false);
         $response->assertSee('id="rightPane"', false);
 
-        // Verify full-width container class
+        // Verify full-width container class & default 70% larger left pane width
         $response->assertSee('container-fluid', false);
+        $response->assertSee('width: 70%', false);
 
-        // Verify MCP Explorer components
+        // Verify MCP Explorer components & pointer event resizer logic
         $response->assertSee('MCP Explorer');
         $response->assertSee('id="skillInstructions"', false);
         $response->assertSee('id="mcpTreeSearch"', false);
+        $response->assertSee('setPointerCapture', false);
     }
 
     public function test_admin_edit_skill_page_has_two_pane_layout_and_mcp_explorer(): void
@@ -84,13 +86,15 @@ class SkillEditorLayoutTest extends TestCase
         $response->assertSee('id="dragResizer"', false);
         $response->assertSee('id="rightPane"', false);
 
-        // Verify full-width container class
+        // Verify full-width container class & default 70% larger left pane width
         $response->assertSee('container-fluid', false);
+        $response->assertSee('width: 70%', false);
 
-        // Verify MCP Explorer components
+        // Verify MCP Explorer components & pointer event resizer logic
         $response->assertSee('MCP Explorer');
         $response->assertSee('id="skillInstructions"', false);
         $response->assertSee('id="mcpTreeSearch"', false);
+        $response->assertSee('setPointerCapture', false);
     }
 
     public function test_mcp_explorer_displays_servers_and_tools(): void

@@ -36,7 +36,7 @@
                 <i class="bi bi-hdd-network display-5 d-block mb-3 opacity-50"></i>
                 <p class="mb-2 fw-semibold">No active MCP servers or tools discovered.</p>
                 <small class="text-body-secondary d-block mb-3">Ensure your MCP servers are active and reachable to display available tools here.</small>
-                <a href="{{ route('admin.mcp_servers.index') }}" class="btn btn-sm btn-outline-primary rounded-pill">
+                <a href="{{ route('admin.mcp-servers.index') }}" class="btn btn-sm btn-outline-primary rounded-pill">
                     <i class="bi bi-hdd-stack me-1"></i> Manage MCP Servers
                 </a>
             </div>

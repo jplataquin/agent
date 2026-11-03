@@ -11,7 +11,7 @@
 
     <div class="skills-editor-wrapper d-flex flex-column flex-lg-row align-items-stretch" id="skillsEditorWrapper">
         <!-- Left Pane: Skill Form / Text Editor -->
-        <div class="skills-pane skills-form-pane" id="leftPane" style="width: 58%; min-width: 320px;">
+        <div class="skills-pane skills-form-pane" id="leftPane" style="width: 70%; min-width: 320px;">
             <div class="card border-0 shadow-sm rounded-3 h-100">
                 <div class="card-body p-4 d-flex flex-column">
                     <form action="{{ route('admin.skills.store') }}" method="POST" id="skillForm" class="d-flex flex-column flex-grow-1">
@@ -66,7 +66,7 @@
         </div>
 
         <!-- Right Pane: MCP Explorer Collapsable Tree -->
-        <div class="skills-pane skills-mcp-pane flex-grow-1 mt-3 mt-lg-0" id="rightPane" style="min-width: 320px;">
+        <div class="skills-pane skills-mcp-pane flex-grow-1 mt-3 mt-lg-0" id="rightPane" style="min-width: 0;">
             @include('admin.skills._mcp_explorer', ['groupedTools' => $groupedTools])
         </div>
     </div>

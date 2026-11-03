@@ -6,37 +6,57 @@
 }
 @media (min-width: 992px) {
     .skills-editor-wrapper {
-        min-height: calc(100vh - 170px);
+        min-height: calc(100vh - 165px);
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: stretch !important;
+        width: 100%;
+        overflow-x: hidden;
     }
-    .skills-pane {
-        height: 100%;
+    .skills-pane.skills-form-pane {
+        flex: 0 0 auto !important;
+        width: 70%;
+        min-width: 320px;
+        max-width: 85%;
+        box-sizing: border-box;
+    }
+    .skills-pane.skills-mcp-pane {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+        width: auto !important;
+        overflow: hidden;
+        box-sizing: border-box;
     }
     .skills-resizer {
-        width: 14px;
+        width: 16px;
         cursor: col-resize;
         user-select: none;
-        display: flex;
+        -webkit-user-select: none;
+        display: flex !important;
         align-items: center;
         justify-content: center;
-        margin: 0 4px;
+        margin: 0 2px;
         border-radius: 6px;
         transition: background-color 0.15s ease;
-        flex-shrink: 0;
+        flex-shrink: 0 !important;
+        z-index: 20;
+        touch-action: none;
     }
     .skills-resizer:hover, .skills-resizer.resizing {
-        background-color: rgba(var(--bs-primary-rgb), 0.15);
+        background-color: rgba(var(--bs-primary-rgb), 0.2);
     }
     .skills-resizer .resizer-bar {
         width: 4px;
-        height: 48px;
+        height: 54px;
         border-radius: 2px;
         background-color: var(--bs-border-color);
         transition: all 0.15s ease;
+        pointer-events: none;
     }
     .skills-resizer:hover .resizer-bar, .skills-resizer.resizing .resizer-bar {
         background-color: var(--bs-primary);
-        height: 72px;
-        box-shadow: 0 0 6px rgba(var(--bs-primary-rgb), 0.5);
+        height: 80px;
+        box-shadow: 0 0 8px rgba(var(--bs-primary-rgb), 0.6);
     }
 }
 @media (max-width: 991.98px) {
@@ -53,41 +73,88 @@
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    // --- 1. Resizer Logic ---
+    // --- 1. Resizer Logic (Pointer & Mouse with 1:1 Direct Tracking) ---
     const resizer = document.getElementById('dragResizer');
     const leftPane = document.getElementById('leftPane');
     const wrapper = document.getElementById('skillsEditorWrapper');
 
     if (resizer && leftPane && wrapper) {
         let isResizing = false;
-        let startX = 0;
-        let startWidth = 0;
 
-        resizer.addEventListener('mousedown', function (e) {
-            if (e.button !== 0) return;
+        function updateWidth(clientX) {
+            const rect = wrapper.getBoundingClientRect();
+            const containerWidth = rect.width;
+            if (containerWidth <= 0) return;
+
+            const pointerX = clientX - rect.left;
+            const minW = Math.max(320, containerWidth * 0.25);
+            const maxW = Math.min(containerWidth - 250, containerWidth * 0.85);
+
+            const clampedWidth = Math.max(minW, Math.min(maxW, pointerX));
+            const percentage = ((clampedWidth / containerWidth) * 100).toFixed(2) + '%';
+
+            leftPane.style.width = percentage;
+            leftPane.style.flexBasis = percentage;
+
+            try {
+                localStorage.setItem('skills_editor_left_width', percentage);
+            } catch (err) {}
+        }
+
+        // Pointer Events (Hardware-accelerated tracking with pointer capture)
+        resizer.addEventListener('pointerdown', function (e) {
+            if (e.button !== 0 && e.pointerType === 'mouse') return;
             isResizing = true;
-            startX = e.clientX;
-            startWidth = leftPane.getBoundingClientRect().width;
             resizer.classList.add('resizing');
             document.body.style.cursor = 'col-resize';
             document.body.style.userSelect = 'none';
+            document.body.style.webkitUserSelect = 'none';
 
-            function onMouseMove(e) {
-                if (!isResizing) return;
-                const dx = e.clientX - startX;
-                const newWidth = startWidth + dx;
-                const containerWidth = wrapper.getBoundingClientRect().width;
+            try {
+                resizer.setPointerCapture(e.pointerId);
+            } catch (err) {}
 
-                const minW = Math.max(320, containerWidth * 0.25);
-                const maxW = Math.min(containerWidth - 300, containerWidth * 0.80);
+            e.preventDefault();
+        });
 
-                if (newWidth >= minW && newWidth <= maxW) {
-                    const percentage = (newWidth / containerWidth) * 100;
-                    leftPane.style.width = percentage + '%';
-                    try {
-                        localStorage.setItem('skills_editor_left_width', percentage + '%');
-                    } catch (e) {}
+        resizer.addEventListener('pointermove', function (e) {
+            if (!isResizing) return;
+            e.preventDefault();
+            updateWidth(e.clientX);
+        });
+
+        function stopPointerResize(e) {
+            if (!isResizing) return;
+            isResizing = false;
+            resizer.classList.remove('resizing');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            document.body.style.webkitUserSelect = '';
+
+            try {
+                if (e && e.pointerId) {
+                    resizer.releasePointerCapture(e.pointerId);
                 }
+            } catch (err) {}
+        }
+
+        resizer.addEventListener('pointerup', stopPointerResize);
+        resizer.addEventListener('pointercancel', stopPointerResize);
+
+        // Fallback Mouse Events for maximum compatibility
+        resizer.addEventListener('mousedown', function (e) {
+            if (e.button !== 0) return;
+            isResizing = true;
+            resizer.classList.add('resizing');
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+            document.body.style.webkitUserSelect = 'none';
+            e.preventDefault();
+
+            function onMouseMove(moveEvent) {
+                if (!isResizing) return;
+                moveEvent.preventDefault();
+                updateWidth(moveEvent.clientX);
             }
 
             function onMouseUp() {
@@ -96,6 +163,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 resizer.classList.remove('resizing');
                 document.body.style.cursor = '';
                 document.body.style.userSelect = '';
+                document.body.style.webkitUserSelect = '';
                 document.removeEventListener('mousemove', onMouseMove);
                 document.removeEventListener('mouseup', onMouseUp);
             }
@@ -104,13 +172,27 @@ document.addEventListener('DOMContentLoaded', function () {
             document.addEventListener('mouseup', onMouseUp);
         });
 
-        // Restore saved preference if on desktop
+        // Initialize default (70%) or restore saved width
         try {
-            const savedWidth = localStorage.getItem('skills_editor_left_width');
-            if (savedWidth && window.innerWidth >= 992) {
-                leftPane.style.width = savedWidth;
+            let saved = localStorage.getItem('skills_editor_left_width');
+            if (saved && window.innerWidth >= 992) {
+                const val = parseFloat(saved);
+                if (!isNaN(val) && val < 65) {
+                    saved = '70%';
+                    localStorage.setItem('skills_editor_left_width', '70%');
+                }
+                leftPane.style.width = saved;
+                leftPane.style.flexBasis = saved;
+            } else if (window.innerWidth >= 992) {
+                leftPane.style.width = '70%';
+                leftPane.style.flexBasis = '70%';
             }
-        } catch (e) {}
+        } catch (e) {
+            if (window.innerWidth >= 992) {
+                leftPane.style.width = '70%';
+                leftPane.style.flexBasis = '70%';
+            }
+        }
     }
 
     // --- 2. Instructions Textarea Cursor Insert Helper ---
