@@ -133,9 +133,11 @@ MSG;
         return view('admin.skills.index', compact('skills'));
     }
 
-    public function create()
+    public function create(McpService $mcpService)
     {
-        return view('admin.skills.create');
+        $groupedTools = $this->getGroupedTools($mcpService);
+
+        return view('admin.skills.create', compact('groupedTools'));
     }
 
     public function store(Request $request)
@@ -156,9 +158,24 @@ MSG;
         return redirect()->route('admin.skills.index')->with('success', 'Skill created successfully.');
     }
 
-    public function edit(Skill $skill)
+    public function edit(Skill $skill, McpService $mcpService)
     {
-        return view('admin.skills.edit', compact('skill'));
+        $groupedTools = $this->getGroupedTools($mcpService);
+
+        return view('admin.skills.edit', compact('skill', 'groupedTools'));
+    }
+
+    protected function getGroupedTools(McpService $mcpService)
+    {
+        $tools = $mcpService->getAllActiveTools();
+
+        return collect($tools)->groupBy(function ($tool) {
+            if (preg_match('/\(Provided by (.*?)\)$/', $tool['function']['description'] ?? '', $matches)) {
+                return $matches[1];
+            }
+
+            return ! empty($tool['is_internal']) ? 'Internal Tools (Native)' : 'External MCP Tools';
+        });
     }
 
     public function preview(Request $request, Skill $skill)
