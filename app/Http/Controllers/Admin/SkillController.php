@@ -185,8 +185,26 @@ MSG;
         $instructions = (string) $request->input('instructions', $skill->instructions);
 
         $markdown = $this->buildSkillMarkdown($name, $description, $instructions);
+        $markdown = Skill::resolveTemplate($markdown);
 
         return view('admin.skills.preview', compact('skill', 'name', 'description', 'instructions', 'markdown'));
+    }
+
+    /**
+     * Resolve templating and build markdown for inline live preview.
+     */
+    public function resolvePreview(Request $request)
+    {
+        $name = (string) $request->input('name', '');
+        $description = (string) $request->input('description', '');
+        $instructions = (string) $request->input('instructions', '');
+
+        $markdown = $this->buildSkillMarkdown($name, $description, $instructions);
+        $resolved = Skill::resolveTemplate($markdown);
+
+        return response()->json([
+            'markdown' => $resolved,
+        ]);
     }
 
     protected function buildSkillMarkdown(?string $name, ?string $description, ?string $instructions): string

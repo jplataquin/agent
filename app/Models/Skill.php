@@ -20,4 +20,34 @@ class Skill extends Model
     protected $casts = [
         'is_active' => 'boolean',
     ];
+
+    /**
+     * Resolves templating syntax like {@skill-slug} within the provided text.
+     * Replaces the tag with the instructions of the referenced skill.
+     * Prevents infinite recursion by tracking visited slugs.
+     */
+    public static function resolveTemplate(?string $text, array $visited = []): string
+    {
+        if (empty($text)) {
+            return '';
+        }
+
+        return preg_replace_callback('/\{@([^}]+)\}/', function ($matches) use ($visited) {
+            $slug = trim($matches[1]);
+
+            if (in_array($slug, $visited, true)) {
+                return "[Circular reference detected for skill: {$slug}]";
+            }
+
+            $skill = self::where('slug', $slug)->first();
+
+            if (! $skill) {
+                return "[Skill not found: {$slug}]";
+            }
+
+            $visited[] = $slug;
+
+            return self::resolveTemplate($skill->instructions, $visited);
+        }, $text);
+    }
 }

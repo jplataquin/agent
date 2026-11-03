@@ -321,6 +321,67 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         });
     }
+
+    // --- 6. Rendered Markdown Preview Tab ---
+    const previewTabBtn = document.getElementById('preview-tab');
+    const previewContainer = document.getElementById('renderedMarkdownContent');
+    const previewLoading = document.getElementById('previewLoading');
+
+    if (previewTabBtn && previewContainer) {
+        previewTabBtn.addEventListener('shown.bs.tab', function () {
+            const form = document.getElementById('skillForm');
+            if (!form) return;
+
+            const name = form.querySelector('[name="name"]')?.value || '';
+            const description = form.querySelector('[name="description"]')?.value || '';
+            const instructions = form.querySelector('[name="instructions"]')?.value || '';
+
+            // Show loading spinner
+            previewLoading?.classList.remove('d-none');
+            previewContainer.innerHTML = '';
+
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+            fetch('{{ route('admin.skills.resolve-preview') }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken || ''
+                },
+                body: JSON.stringify({
+                    name: name,
+                    description: description,
+                    instructions: instructions
+                })
+            })
+            .then(res => {
+                if (!res.ok) throw new Error('Failed to load preview');
+                return res.json();
+            })
+            .then(data => {
+                previewLoading?.classList.add('d-none');
+                const rawMarkdown = data.markdown || '';
+                
+                if (window.marked) {
+                    previewContainer.innerHTML = marked.parse(rawMarkdown);
+                } else {
+                    previewContainer.innerText = rawMarkdown;
+                }
+
+                // Apply syntax highlighting to code blocks if hljs is available
+                if (window.hljs) {
+                    previewContainer.querySelectorAll('pre code').forEach((block) => {
+                        hljs.highlightElement(block);
+                    });
+                }
+            })
+            .catch(err => {
+                previewLoading?.classList.add('d-none');
+                previewContainer.innerHTML = `<div class="alert alert-danger mb-0"><i class="bi bi-exclamation-triangle me-2"></i>Failed to render preview: ${err.message}</div>`;
+            });
+        });
+    }
 });
 </script>
 @endpush

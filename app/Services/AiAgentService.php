@@ -9,7 +9,6 @@ use App\Models\MasterPrompt;
 use App\Models\Skill;
 use App\Models\TokenMetric;
 use App\Services\Llm\LlmAdapterFactory;
-use Exception;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
@@ -40,7 +39,8 @@ class AiAgentService
         if ($skills->isNotEmpty()) {
             $promptParts[] = "\n## Active Specialized Skills & Guidelines:";
             foreach ($skills as $skill) {
-                $promptParts[] = "### Skill: {$skill->name}\n{$skill->instructions}\n";
+                $instructions = Skill::resolveTemplate($skill->instructions);
+                $promptParts[] = "### Skill: {$skill->name}\n{$instructions}\n";
             }
         }
 
@@ -338,8 +338,8 @@ The user is currently chatting on a mobile device{$widthInfo}.
         // Tool execution limit reached or early wrap-up requested: force final synthesis turn with tools disabled
         $messages = $this->buildMessagesPayload($session);
         $reasonNotice = $forcedWrapUp
-            ? "Notice: The user requested an early wrap-up. Synthesize all findings and tool outputs gathered so far into a concise, direct final response. Do not call any further tools."
-            : "Notice: Maximum tool execution limit reached. Please pause and ask the user if they would like you to wrap up the current task, or if they grant you permission to continue running with additional tool calls. Do not attempt to call any more tools in this response.";
+            ? 'Notice: The user requested an early wrap-up. Synthesize all findings and tool outputs gathered so far into a concise, direct final response. Do not call any further tools.'
+            : 'Notice: Maximum tool execution limit reached. Please pause and ask the user if they would like you to wrap up the current task, or if they grant you permission to continue running with additional tool calls. Do not attempt to call any more tools in this response.';
         $synthesisPrompt = $systemPrompt."\n\n".$reasonNotice;
 
         try {
