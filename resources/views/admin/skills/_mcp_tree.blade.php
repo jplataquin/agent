@@ -8,7 +8,7 @@
         </a>
     </div>
 @else
-    <div class="accordion accordion-flush" id="mcpServersAccordion">
+    <div class="mcp-servers-tree" id="mcpServersAccordion">
         @foreach($groupedTools as $serverName => $tools)
             @php
                 $serverIndex = $loop->index;
@@ -17,48 +17,50 @@
                 $server = isset($serversMap) ? ($serversMap[$serverName] ?? null) : null;
                 $serverId = $server?->id ?? ($firstTool['server_id'] ?? null);
             @endphp
-            <div class="accordion-item border rounded-3 mb-2 mcp-server-node bg-body" data-server-name="{{ strtolower($serverName) }}">
-                <h2 class="accordion-header" id="headingServer{{ $serverIndex }}">
-                    <button class="accordion-button rounded-3 py-2 px-3 fw-semibold text-body" type="button" data-bs-toggle="collapse" data-bs-target="#collapseServer{{ $serverIndex }}" aria-expanded="true" aria-controls="collapseServer{{ $serverIndex }}">
-                        <div class="d-flex align-items-center justify-content-between w-100 me-2">
-                            <div class="d-flex align-items-center gap-2 text-truncate">
-                                @if($isInternal)
-                                    <i class="bi bi-cpu-fill text-info fs-5 flex-shrink-0"></i>
-                                @else
-                                    <i class="bi bi-hdd-network-fill text-primary fs-5 flex-shrink-0"></i>
-                                @endif
-                                <span class="server-title text-truncate" style="max-width: 200px;" title="{{ $serverName }}">{{ $serverName }}</span>
-                            </div>
-                            <div class="d-flex align-items-center gap-2 flex-shrink-0">
-                                @if(!$isInternal && !empty($serverId))
-                                    <button type="button" class="btn btn-outline-primary btn-xs rounded-pill sync-single-server-btn"
-                                            data-server-id="{{ $serverId }}"
-                                            data-server-name="{{ $serverName }}"
-                                            data-sync-url="{{ route('admin.mcp-servers.sync', $serverId) }}"
-                                            title="Sync tools from {{ $serverName }}"
-                                            onclick="event.stopPropagation();">
-                                        <i class="bi bi-arrow-repeat"></i>
-                                        <span class="btn-text">Sync</span>
-                                    </button>
-                                @endif
-                                <span class="badge {{ $isInternal ? 'bg-info-subtle text-info-emphasis' : 'bg-secondary-subtle text-secondary-emphasis' }} rounded-pill font-monospace server-tool-count">
-                                    {{ count($tools) }} {{ Str::plural('tool', count($tools)) }}
-                                </span>
-                            </div>
-                        </div>
-                    </button>
-                </h2>
-                <div id="collapseServer{{ $serverIndex }}" class="accordion-collapse collapse show" aria-labelledby="headingServer{{ $serverIndex }}">
-                    <div class="accordion-body p-2 pt-1">
+            <div class="border rounded-3 mb-2 mcp-server-node bg-body overflow-hidden" data-server-name="{{ strtolower($serverName) }}">
+                <div class="d-flex align-items-center justify-content-between py-2 px-3 bg-body-tertiary cursor-pointer mcp-server-header"
+                     data-bs-toggle="collapse"
+                     data-bs-target="#collapseServer{{ $serverIndex }}"
+                     aria-expanded="true"
+                     aria-controls="collapseServer{{ $serverIndex }}">
+                    <div class="d-flex align-items-center gap-2 text-truncate me-2">
+                        @if($isInternal)
+                            <i class="bi bi-cpu-fill text-info fs-5 flex-shrink-0"></i>
+                        @else
+                            <i class="bi bi-hdd-network-fill text-primary fs-5 flex-shrink-0"></i>
+                        @endif
+                        <span class="server-title fw-semibold text-body text-truncate" title="{{ $serverName }}">{{ $serverName }}</span>
+                        @if(!$isInternal && !empty($serverId))
+                            <button type="button" class="btn btn-outline-secondary btn-xs rounded-circle p-0 sync-single-server-btn flex-shrink-0"
+                                    data-server-id="{{ $serverId }}"
+                                    data-server-name="{{ $serverName }}"
+                                    data-sync-url="{{ route('admin.mcp-servers.sync', $serverId) }}"
+                                    title="Sync {{ $serverName }}"
+                                    style="width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center;"
+                                    onclick="event.stopPropagation();">
+                                <i class="bi bi-arrow-repeat" style="font-size: 0.75rem;"></i>
+                            </button>
+                        @endif
+                    </div>
+                    <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                        <span class="badge {{ $isInternal ? 'bg-info-subtle text-info-emphasis' : 'bg-secondary-subtle text-secondary-emphasis' }} rounded-pill font-monospace server-tool-count">
+                            {{ count($tools) }} {{ Str::plural('tool', count($tools)) }}
+                        </span>
+                        <i class="bi bi-chevron-down text-body-secondary accordion-arrow-icon" style="font-size: 0.8rem; transition: transform 0.2s ease;"></i>
+                    </div>
+                </div>
+
+                <div id="collapseServer{{ $serverIndex }}" class="accordion-collapse collapse show">
+                    <div class="p-2 pt-1">
                         @if(count($tools) === 0)
-                            <div class="p-3 text-center text-body-secondary small bg-body-tertiary rounded-2">
+                            <div class="p-3 text-center text-body-secondary small bg-body-tertiary rounded-2 my-1">
                                 <i class="bi bi-info-circle me-1"></i>No tools discovered yet.
                                 @if(!$isInternal && !empty($serverId))
-                                    Click <strong>Sync</strong> above to discover tools from this server.
+                                    Click the sync button beside the server name to discover tools.
                                 @endif
                             </div>
                         @else
-                            <div class="d-flex flex-column gap-2">
+                            <div class="d-flex flex-column gap-2 mt-1">
                                 @foreach($tools as $toolIndex => $tool)
                                     @php
                                         $fn = $tool['function'] ?? [];

@@ -157,8 +157,7 @@ class SkillEditorLayoutTest extends TestCase
         $response->assertSee('Executes read-only SQL queries on the data warehouse.');
         $response->assertSee('The SQL statement to execute');
 
-        // Verify Sync buttons in MCP Explorer
-        $response->assertSee('id="mcpSyncAllBtn"', false);
+        // Verify Sync button beside server name in node
         $response->assertSee('sync-single-server-btn', false);
     }
 

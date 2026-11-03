@@ -1,7 +1,7 @@
 <div class="card border-0 shadow-sm rounded-3 h-100 d-flex flex-column mcp-explorer-card">
     <div class="card-header bg-transparent border-0 px-3 pt-3 pb-2">
         <div class="d-flex justify-content-between align-items-center mb-2">
-            <h5 class="fw-bold mb-0 d-flex align-items-center gap-2">
+            <h6 class="fw-bold mb-0 d-flex align-items-center gap-2">
                 <i class="bi bi-diagram-3-fill text-primary"></i>
                 <span>MCP Explorer</span>
                 @php
@@ -13,20 +13,14 @@
                     }
                 @endphp
                 <span class="badge bg-primary-subtle text-primary-emphasis rounded-pill fs-7" id="mcpTotalToolsBadge">{{ $totalTools }} Tools</span>
-            </h5>
-            <div class="d-flex align-items-center gap-1">
-                <button type="button" class="btn btn-outline-primary btn-xs rounded-pill px-2 py-1" id="mcpSyncAllBtn" title="Sync all active MCP servers">
-                    <i class="bi bi-arrow-repeat me-1"></i>
-                    <span class="btn-text">Sync All</span>
+            </h6>
+            <div class="btn-group btn-group-sm">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="mcpExpandAllBtn" title="Expand All Servers">
+                    <i class="bi bi-arrows-expand"></i>
                 </button>
-                <div class="btn-group btn-group-sm">
-                    <button type="button" class="btn btn-outline-secondary btn-sm" id="mcpExpandAllBtn" title="Expand All Servers">
-                        <i class="bi bi-arrows-expand"></i>
-                    </button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm" id="mcpCollapseAllBtn" title="Collapse All Servers">
-                        <i class="bi bi-arrows-collapse"></i>
-                    </button>
-                </div>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="mcpCollapseAllBtn" title="Collapse All Servers">
+                    <i class="bi bi-arrows-collapse"></i>
+                </button>
             </div>
         </div>
 
@@ -36,7 +30,7 @@
         </div>
     </div>
 
-    <div class="card-body p-3 overflow-y-auto flex-grow-1" style="max-height: calc(100vh - 240px); min-height: 420px;" id="mcpTreeContainer">
+    <div class="card-body p-3 pt-2 overflow-y-auto flex-grow-1" style="max-height: calc(100vh - 240px); min-height: 420px;" id="mcpTreeContainer">
         @include('admin.skills._mcp_tree', ['groupedTools' => $groupedTools, 'serversMap' => $serversMap ?? null])
     </div>
 </div>

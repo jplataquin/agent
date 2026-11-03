@@ -426,7 +426,7 @@ document.addEventListener('DOMContentLoaded', function () {
             };
         });
 
-        // Single Server Sync Button
+        // Single Server Sync Button (Beside server name in node)
         document.querySelectorAll('.sync-single-server-btn').forEach(btn => {
             btn.onclick = function (e) {
                 e.stopPropagation();
@@ -435,11 +435,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (!syncUrl) return;
 
                 const icon = this.querySelector('i');
-                const textSpan = this.querySelector('.btn-text');
-                const originalText = textSpan ? textSpan.textContent : '';
                 this.disabled = true;
                 if (icon) icon.classList.add('spin');
-                if (textSpan) textSpan.textContent = 'Syncing...';
 
                 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
 
@@ -453,7 +450,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 })
                 .then(res => res.json())
                 .then(data => {
-                    // Fetch updated tree
                     return fetch('{{ route('admin.skills.mcp-tree') }}', {
                         headers: { 'Accept': 'application/json' }
                     })
@@ -474,7 +470,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     console.error('Failed to sync server:', err);
                     this.disabled = false;
                     if (icon) icon.classList.remove('spin');
-                    if (textSpan) textSpan.textContent = originalText;
                     showMcpNotification(`Failed to sync ${serverName}: ${err.message}`, 'danger');
                 });
             };
@@ -484,52 +479,19 @@ document.addEventListener('DOMContentLoaded', function () {
     // Initial listener attachment
     attachMcpTreeListeners();
 
-    // --- 6. Sync All MCP Servers Button ---
-    const syncAllBtn = document.getElementById('mcpSyncAllBtn');
-    if (syncAllBtn) {
-        syncAllBtn.addEventListener('click', function () {
-            const icon = this.querySelector('i');
-            const textSpan = this.querySelector('.btn-text');
-            this.disabled = true;
-            if (icon) icon.classList.add('spin');
-            if (textSpan) textSpan.textContent = 'Syncing...';
+    // Accordion chevron rotation on expand/collapse
+    document.addEventListener('show.bs.collapse', function (e) {
+        const header = e.target.previousElementSibling;
+        const arrow = header?.querySelector('.accordion-arrow-icon');
+        if (arrow) arrow.style.transform = 'rotate(0deg)';
+    });
+    document.addEventListener('hide.bs.collapse', function (e) {
+        const header = e.target.previousElementSibling;
+        const arrow = header?.querySelector('.accordion-arrow-icon');
+        if (arrow) arrow.style.transform = 'rotate(-90deg)';
+    });
 
-            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-
-            fetch('{{ route('admin.skills.sync-all-mcp') }}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': csrfToken || ''
-                }
-            })
-            .then(res => res.json())
-            .then(data => {
-                this.disabled = false;
-                if (icon) icon.classList.remove('spin');
-                if (textSpan) textSpan.textContent = 'Sync All';
-
-                const container = document.getElementById('mcpTreeContainer');
-                if (container && data.html) {
-                    container.innerHTML = data.html;
-                    const badge = document.getElementById('mcpTotalToolsBadge');
-                    if (badge) badge.textContent = data.total_tools + ' Tools';
-                    attachMcpTreeListeners();
-                    applySearchFilter();
-                }
-                showMcpNotification(data.message || 'All MCP servers synced successfully.', data.success ? 'success' : 'warning');
-            })
-            .catch(err => {
-                this.disabled = false;
-                if (icon) icon.classList.remove('spin');
-                if (textSpan) textSpan.textContent = 'Sync All';
-                showMcpNotification(`Sync failed: ${err.message}`, 'danger');
-            });
-        });
-    }
-
-    // --- 7. Expand All / Collapse All ---
+    // --- 6. Expand All / Collapse All ---
     const expandAllBtn = document.getElementById('mcpExpandAllBtn');
     const collapseAllBtn = document.getElementById('mcpCollapseAllBtn');
 
@@ -539,6 +501,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 const bsCollapse = bootstrap.Collapse.getOrCreateInstance(collapseEl);
                 bsCollapse.show();
             });
+            document.querySelectorAll('#mcpServersAccordion .accordion-arrow-icon').forEach(arrow => {
+                arrow.style.transform = 'rotate(0deg)';
+            });
         });
     }
 
@@ -547,6 +512,9 @@ document.addEventListener('DOMContentLoaded', function () {
             document.querySelectorAll('#mcpServersAccordion .accordion-collapse').forEach(collapseEl => {
                 const bsCollapse = bootstrap.Collapse.getOrCreateInstance(collapseEl);
                 bsCollapse.hide();
+            });
+            document.querySelectorAll('#mcpServersAccordion .accordion-arrow-icon').forEach(arrow => {
+                arrow.style.transform = 'rotate(-90deg)';
             });
         });
     }
