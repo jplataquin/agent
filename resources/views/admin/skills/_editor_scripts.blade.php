@@ -67,6 +67,89 @@
         width: 100% !important;
     }
 }
+
+/* Tab panes visibility fix */
+#skillEditorTabContent > .tab-pane:not(.active) {
+    display: none !important;
+}
+#skillEditorTabContent > .tab-pane.active {
+    display: block !important;
+    height: 100%;
+}
+
+/* Markdown preview styling */
+#renderedMarkdownContent.markdown-body {
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+#renderedMarkdownContent.markdown-body h1,
+#renderedMarkdownContent.markdown-body h2,
+#renderedMarkdownContent.markdown-body h3,
+#renderedMarkdownContent.markdown-body h4 {
+    margin-top: 1.25rem;
+    margin-bottom: 0.5rem;
+    font-weight: 700;
+}
+#renderedMarkdownContent.markdown-body h1 {
+    font-size: 1.6rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px solid var(--bs-border-color);
+}
+#renderedMarkdownContent.markdown-body h2 {
+    font-size: 1.3rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid var(--bs-border-color);
+}
+#renderedMarkdownContent.markdown-body h3 { font-size: 1.15rem; }
+#renderedMarkdownContent.markdown-body p { margin-bottom: 0.75rem; }
+#renderedMarkdownContent.markdown-body ul,
+#renderedMarkdownContent.markdown-body ol {
+    padding-left: 1.5rem;
+    margin-bottom: 0.75rem;
+}
+#renderedMarkdownContent.markdown-body blockquote {
+    border-left: 4px solid var(--bs-primary);
+    padding: 0.5rem 1rem;
+    margin: 0.75rem 0;
+    color: var(--bs-secondary-color);
+    background-color: var(--bs-tertiary-bg);
+    border-radius: 0 6px 6px 0;
+}
+#renderedMarkdownContent.markdown-body table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+}
+#renderedMarkdownContent.markdown-body th,
+#renderedMarkdownContent.markdown-body td {
+    border: 1px solid var(--bs-border-color);
+    padding: 6px 12px;
+}
+#renderedMarkdownContent.markdown-body th {
+    background-color: var(--bs-tertiary-bg);
+    font-weight: 600;
+}
+#renderedMarkdownContent.markdown-body :not(pre) > code {
+    padding: 0.15em 0.35em;
+    background-color: var(--bs-secondary-bg);
+    border-radius: 4px;
+    font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.88em;
+    color: var(--bs-primary-text-emphasis);
+}
+#renderedMarkdownContent.markdown-body pre {
+    margin: 0.75rem 0;
+    padding: 0.85rem 1rem;
+    overflow-x: auto;
+    border-radius: 6px;
+    background: #1e1e2e;
+    color: #f8f8f2;
+}
+#renderedMarkdownContent.markdown-body pre code {
+    background: transparent;
+    padding: 0;
+}
 </style>
 @endpush
 

@@ -38,10 +38,10 @@
                     </ul>
                 </div>
                 <div class="card-body p-4 d-flex flex-column flex-grow-1">
-                    <div class="tab-content flex-grow-1 d-flex flex-column" id="skillEditorTabContent">
+                    <div class="tab-content flex-grow-1" id="skillEditorTabContent">
                         <!-- Tab 1: Editor Form -->
-                        <div class="tab-pane fade show active flex-grow-1 d-flex flex-column" id="editor-tab-pane" role="tabpanel" aria-labelledby="editor-tab" tabindex="0">
-                            <form action="{{ route('admin.skills.update', $skill) }}" method="POST" id="skillForm" class="d-flex flex-column flex-grow-1">
+                        <div class="tab-pane fade show active" id="editor-tab-pane" role="tabpanel" aria-labelledby="editor-tab" tabindex="0">
+                            <form action="{{ route('admin.skills.update', $skill) }}" method="POST" id="skillForm" class="d-flex flex-column">
                                 @csrf
                                 @method('PUT')
                                 <div class="row g-3 mb-3">
@@ -64,12 +64,12 @@
                                     @error('description') <div class="invalid-feedback">{{ $message }}</div> @enderror
                                 </div>
 
-                                <div class="mb-3 flex-grow-1 d-flex flex-column">
+                                <div class="mb-3">
                                     <div class="d-flex justify-content-between align-items-center mb-1">
                                         <label class="form-label fw-semibold mb-0" for="skillInstructions">Instructions for AI Agent</label>
                                         <small class="text-body-secondary">Markdown supported &bull; Use <code>&#123;@skill-slug&#125;</code> to include another skill</small>
                                     </div>
-                                    <textarea name="instructions" id="skillInstructions" rows="12" class="form-control font-monospace flex-grow-1 @error('instructions') is-invalid @enderror" style="min-height: 280px; resize: vertical;" required placeholder="Provide guidelines, business logic, constraints, links, and tone...">{{ old('instructions', $skill->instructions) }}</textarea>
+                                    <textarea name="instructions" id="skillInstructions" rows="12" class="form-control font-monospace @error('instructions') is-invalid @enderror" style="min-height: 280px; resize: vertical;" required placeholder="Provide guidelines, business logic, constraints, links, and tone...">{{ old('instructions', $skill->instructions) }}</textarea>
                                     @error('instructions') <div class="invalid-feedback">{{ $message }}</div> @enderror
                                 </div>
 
@@ -87,8 +87,8 @@
                         </div>
 
                         <!-- Tab 2: Rendered Markdown -->
-                        <div class="tab-pane fade flex-grow-1" id="preview-tab-pane" role="tabpanel" aria-labelledby="preview-tab" tabindex="0">
-                            <div class="p-3 border rounded-3 bg-body-tertiary h-100 overflow-y-auto" style="min-height: 400px;">
+                        <div class="tab-pane fade" id="preview-tab-pane" role="tabpanel" aria-labelledby="preview-tab" tabindex="0">
+                            <div class="p-3 border rounded-3 bg-body-tertiary overflow-y-auto" style="min-height: 480px; max-height: calc(100vh - 250px);">
                                 <div id="previewLoading" class="text-center py-5 d-none">
                                     <div class="spinner-border text-primary" role="status">
                                         <span class="visually-hidden">Loading preview...</span>
