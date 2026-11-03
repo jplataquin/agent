@@ -609,26 +609,31 @@ document.addEventListener('DOMContentLoaded', function () {
 
         function getCaretCoordinates(element, position) {
             const div = document.createElement('div');
+            document.body.appendChild(div);
+
             const style = window.getComputedStyle(element);
 
-            const properties = [
-                'direction', 'boxSizing', 'width', 'height', 'overflowX', 'overflowY',
-                'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth',
+            div.style.position = 'absolute';
+            div.style.top = '0px';
+            div.style.left = '-9999px';
+            div.style.visibility = 'hidden';
+            div.style.pointerEvents = 'none';
+            div.style.whiteSpace = 'pre-wrap';
+            div.style.wordWrap = 'break-word';
+            div.style.overflowWrap = 'break-word';
+            div.style.boxSizing = 'border-box';
+            div.style.width = element.offsetWidth + 'px';
+
+            const propertiesToCopy = [
+                'fontFamily', 'fontSize', 'fontWeight', 'fontStyle',
+                'letterSpacing', 'lineHeight', 'textTransform', 'wordSpacing',
+                'textIndent', 'tabSize', 'direction',
                 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
-                'fontStyle', 'fontVariant', 'fontWeight', 'fontStretch', 'fontSize',
-                'fontSizeAdjust', 'lineHeight', 'fontFamily', 'textAlign', 'textTransform',
-                'textIndent', 'textDecoration', 'letterSpacing', 'wordSpacing', 'tabSize',
-                'whiteSpace', 'wordBreak'
+                'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth',
+                'borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle'
             ];
 
-            div.style.position = 'absolute';
-            div.style.visibility = 'hidden';
-            div.style.whiteSpace = 'pre-wrap';
-            div.style.wordBreak = 'break-word';
-            div.style.top = '0';
-            div.style.left = '0';
-
-            properties.forEach(prop => {
+            propertiesToCopy.forEach(prop => {
                 div.style[prop] = style[prop];
             });
 
@@ -646,14 +651,15 @@ document.addEventListener('DOMContentLoaded', function () {
             span.textContent = element.value.substring(position) || '.';
             div.appendChild(span);
 
-            document.body.appendChild(div);
-            
+            const borderTop = parseInt(style.borderTopWidth) || 0;
+            const borderLeft = parseInt(style.borderLeftWidth) || 0;
+
             const coordinates = {
-                top: span.offsetTop + parseInt(style.borderTopWidth || 0) - element.scrollTop,
-                left: span.offsetLeft + parseInt(style.borderLeftWidth || 0) - element.scrollLeft,
-                height: parseInt(style.lineHeight) || span.offsetHeight || 20
+                top: span.offsetTop + borderTop - element.scrollTop,
+                left: span.offsetLeft + borderLeft - element.scrollLeft,
+                height: span.offsetHeight || parseInt(style.lineHeight) || 20
             };
-            
+
             document.body.removeChild(div);
             return coordinates;
         }
@@ -662,28 +668,41 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!isSuggestionOpen) return;
             const rect = instructionsTextarea.getBoundingClientRect();
             const caret = getCaretCoordinates(instructionsTextarea, instructionsTextarea.selectionStart);
-            const boxWidth = 330;
-            const boxMaxHeight = 270;
-            
-            let left = rect.left + window.scrollX + caret.left;
-            let top = rect.top + window.scrollY + caret.top + caret.height + 4;
 
-            // Keep within viewport horizontally
-            if (left + boxWidth > window.innerWidth + window.scrollX - 15) {
-                left = window.innerWidth + window.scrollX - boxWidth - 15;
+            // If caret is scrolled outside visible textarea bounds, close suggestion box
+            if (caret.top < -10 || caret.top > instructionsTextarea.clientHeight + 10) {
+                closeSuggestion();
+                return;
             }
-            if (left < window.scrollX + 15) left = window.scrollX + 15;
 
-            // Flip above cursor if it would clip the bottom of the viewport
-            if (top - window.scrollY + boxMaxHeight > window.innerHeight - 15) {
-                const spaceAbove = rect.top + caret.top;
-                if (spaceAbove > boxMaxHeight) {
-                    top = rect.top + window.scrollY + caret.top - boxMaxHeight - 4;
+            const boxWidth = suggestionBox.offsetWidth || 330;
+            const boxHeight = suggestionBox.offsetHeight || 220;
+
+            const cursorDocTop = rect.top + window.scrollY + caret.top;
+            const cursorDocLeft = rect.left + window.scrollX + caret.left;
+
+            let left = cursorDocLeft;
+            let top = cursorDocTop + caret.height + 4; // Default: directly below cursor line
+
+            // Viewport boundary checks
+            const viewportBottom = window.scrollY + window.innerHeight;
+            const viewportTop = window.scrollY;
+
+            // Only flip above if it overflows the bottom of the visible screen AND fits above
+            if (top + boxHeight > viewportBottom - 10) {
+                const topAbove = cursorDocTop - boxHeight - 4;
+                if (topAbove > viewportTop + 10) {
+                    top = topAbove;
                 }
             }
 
-            suggestionBox.style.left = `${left}px`;
-            suggestionBox.style.top = `${top}px`;
+            // Keep within viewport horizontally
+            const maxLeft = window.innerWidth + window.scrollX - boxWidth - 16;
+            const minLeft = window.scrollX + 16;
+            left = Math.max(minLeft, Math.min(maxLeft, left));
+
+            suggestionBox.style.left = `${Math.round(left)}px`;
+            suggestionBox.style.top = `${Math.round(top)}px`;
         }
 
         function escapeHtml(str) {
@@ -742,9 +761,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 suggestionList.appendChild(btn);
             });
 
-            updatePosition();
             suggestionBox.style.display = 'block';
             isSuggestionOpen = true;
+            updatePosition();
             scrollActiveIntoView();
         }
 
