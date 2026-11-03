@@ -611,6 +611,261 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         });
     }
+
+    // --- 9. Skill @-Mention Autocomplete Suggestion Box ---
+    const availableSkills = @json($availableSkills ?? []);
+    if (instructionsTextarea && availableSkills && availableSkills.length > 0) {
+        // Create suggestion box container
+        const suggestionBox = document.createElement('div');
+        suggestionBox.id = 'skillSuggestionBox';
+        suggestionBox.className = 'card shadow-lg border rounded-3 p-1 position-absolute bg-body';
+        suggestionBox.style.display = 'none';
+        suggestionBox.style.zIndex = '1099';
+        suggestionBox.style.width = '330px';
+        suggestionBox.style.maxHeight = '270px';
+
+        suggestionBox.innerHTML = `
+            <div class="px-2 py-1 border-bottom bg-body-tertiary rounded-top text-body-secondary small d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-at text-primary me-1"></i><strong>Include Skill</strong></span>
+                <span class="badge bg-secondary-subtle text-secondary-emphasis font-monospace" style="font-size: 0.68rem;">&uarr;&darr; Enter</span>
+            </div>
+            <div class="list-group list-group-flush overflow-y-auto" id="skillSuggestionList" style="max-height: 220px;"></div>
+        `;
+        document.body.appendChild(suggestionBox);
+
+        const suggestionList = suggestionBox.querySelector('#skillSuggestionList');
+        let isSuggestionOpen = false;
+        let selectedIndex = 0;
+        let activeFilteredSkills = [];
+        let matchRange = { start: 0, end: 0 };
+
+        function getCaretCoordinates(element, position) {
+            const div = document.createElement('div');
+            const style = window.getComputedStyle(element);
+
+            const properties = [
+                'direction', 'boxSizing', 'width', 'height', 'overflowX', 'overflowY',
+                'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth',
+                'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+                'fontStyle', 'fontVariant', 'fontWeight', 'fontStretch', 'fontSize',
+                'fontSizeAdjust', 'lineHeight', 'fontFamily', 'textAlign', 'textTransform',
+                'textIndent', 'textDecoration', 'letterSpacing', 'wordSpacing', 'tabSize',
+                'whiteSpace', 'wordBreak'
+            ];
+
+            div.style.position = 'absolute';
+            div.style.visibility = 'hidden';
+            div.style.whiteSpace = 'pre-wrap';
+            div.style.wordBreak = 'break-word';
+            div.style.top = '0';
+            div.style.left = '0';
+
+            properties.forEach(prop => {
+                div.style[prop] = style[prop];
+            });
+
+            const text = element.value.substring(0, position);
+            div.textContent = text;
+
+            const span = document.createElement('span');
+            span.textContent = element.value.substring(position) || '.';
+            div.appendChild(span);
+
+            document.body.appendChild(div);
+            const coordinates = {
+                top: span.offsetTop - element.scrollTop,
+                left: span.offsetLeft - element.scrollLeft,
+                height: parseInt(style.lineHeight) || 20
+            };
+            document.body.removeChild(div);
+            return coordinates;
+        }
+
+        function updatePosition() {
+            if (!isSuggestionOpen) return;
+            const rect = instructionsTextarea.getBoundingClientRect();
+            const caret = getCaretCoordinates(instructionsTextarea, instructionsTextarea.selectionStart);
+            const boxWidth = 330;
+            let left = rect.left + window.scrollX + caret.left;
+            let top = rect.top + window.scrollY + caret.top + caret.height + 4;
+
+            if (left + boxWidth > window.innerWidth - 15) {
+                left = window.innerWidth - boxWidth - 15;
+            }
+            if (left < 15) left = 15;
+
+            if (top + 260 > window.innerHeight + window.scrollY) {
+                top = Math.max(10, rect.top + window.scrollY + caret.top - 265);
+            }
+
+            suggestionBox.style.left = `${left}px`;
+            suggestionBox.style.top = `${top}px`;
+        }
+
+        function escapeHtml(str) {
+            return String(str || '').replace(/[&<>"']/g, function(m) {
+                return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];
+            });
+        }
+
+        function updateActiveItem() {
+            const items = suggestionList.querySelectorAll('.list-group-item');
+            items.forEach((item, idx) => {
+                if (idx === selectedIndex) {
+                    item.classList.add('active');
+                    const code = item.querySelector('code');
+                    if (code) { code.classList.remove('text-primary'); code.classList.add('text-white'); }
+                    const desc = item.querySelector('div.small');
+                    if (desc) { desc.classList.remove('text-body-secondary'); desc.classList.add('text-white-50'); }
+                } else {
+                    item.classList.remove('active');
+                    const code = item.querySelector('code');
+                    if (code) { code.classList.add('text-primary'); code.classList.remove('text-white'); }
+                    const desc = item.querySelector('div.small');
+                    if (desc) { desc.classList.add('text-body-secondary'); desc.classList.remove('text-white-50'); }
+                }
+            });
+        }
+
+        function scrollActiveIntoView() {
+            const items = suggestionList.querySelectorAll('.list-group-item');
+            if (items[selectedIndex]) {
+                items[selectedIndex].scrollIntoView({ block: 'nearest' });
+            }
+        }
+
+        function renderSuggestions() {
+            suggestionList.innerHTML = '';
+            activeFilteredSkills.forEach((skill, idx) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = `list-group-item list-group-item-action py-2 px-3 border-0 rounded-2 mb-1 text-start ${idx === selectedIndex ? 'active' : ''}`;
+                btn.innerHTML = `
+                    <div class="d-flex align-items-center justify-content-between w-100 gap-2">
+                        <span class="fw-bold small text-truncate">${escapeHtml(skill.name)}</span>
+                        <code class="small ${idx === selectedIndex ? 'text-white' : 'text-primary'} flex-shrink-0">{@${escapeHtml(skill.slug)}}</code>
+                    </div>
+                    ${skill.description ? `<div class="small ${idx === selectedIndex ? 'text-white-50' : 'text-body-secondary'} text-truncate" style="font-size: 0.78rem;">${escapeHtml(skill.description)}</div>` : ''}
+                `;
+                btn.onmousedown = function (e) {
+                    e.preventDefault();
+                    acceptSuggestion(skill);
+                };
+                btn.onmouseenter = function () {
+                    selectedIndex = idx;
+                    updateActiveItem();
+                };
+                suggestionList.appendChild(btn);
+            });
+
+            updatePosition();
+            suggestionBox.style.display = 'block';
+            isSuggestionOpen = true;
+            scrollActiveIntoView();
+        }
+
+        function closeSuggestion() {
+            suggestionBox.style.display = 'none';
+            isSuggestionOpen = false;
+            activeFilteredSkills = [];
+            selectedIndex = 0;
+        }
+
+        function acceptSuggestion(skill) {
+            let replaceStart = matchRange.start;
+            let replaceEnd = matchRange.end;
+
+            if (instructionsTextarea.value.charAt(replaceEnd) === '}') {
+                replaceEnd += 1;
+            }
+
+            const replacement = `{@${skill.slug}}`;
+            const originalVal = instructionsTextarea.value;
+            instructionsTextarea.value = originalVal.substring(0, replaceStart) + replacement + originalVal.substring(replaceEnd);
+
+            const newPos = replaceStart + replacement.length;
+            instructionsTextarea.selectionStart = newPos;
+            instructionsTextarea.selectionEnd = newPos;
+            instructionsTextarea.focus();
+            instructionsTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+
+            closeSuggestion();
+        }
+
+        function checkTrigger() {
+            const cursor = instructionsTextarea.selectionStart;
+            const textBefore = instructionsTextarea.value.substring(0, cursor);
+
+            // Match @query or {@query right before cursor
+            const match = textBefore.match(/(?:^|\s|\{)@([a-zA-Z0-9_-]*)$/);
+
+            if (!match) {
+                closeSuggestion();
+                return;
+            }
+
+            const query = match[1].toLowerCase();
+            let start = cursor - match[0].length;
+            if (match[0].startsWith(' ') || match[0].startsWith('\n') || match[0].startsWith('\t')) {
+                start += 1;
+            }
+
+            matchRange = { start: start, end: cursor };
+
+            activeFilteredSkills = availableSkills.filter(s => {
+                const slugMatch = s.slug && s.slug.toLowerCase().includes(query);
+                const nameMatch = s.name && s.name.toLowerCase().includes(query);
+                return slugMatch || nameMatch;
+            });
+
+            if (activeFilteredSkills.length === 0) {
+                closeSuggestion();
+                return;
+            }
+
+            selectedIndex = 0;
+            renderSuggestions();
+        }
+
+        instructionsTextarea.addEventListener('input', checkTrigger);
+        instructionsTextarea.addEventListener('click', checkTrigger);
+        instructionsTextarea.addEventListener('keyup', function (e) {
+            if (['ArrowLeft', 'ArrowRight', 'Backspace'].includes(e.key)) {
+                checkTrigger();
+            }
+        });
+        instructionsTextarea.addEventListener('scroll', updatePosition);
+
+        instructionsTextarea.addEventListener('keydown', function (e) {
+            if (!isSuggestionOpen) return;
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                selectedIndex = (selectedIndex + 1) % activeFilteredSkills.length;
+                updateActiveItem();
+                scrollActiveIntoView();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                selectedIndex = (selectedIndex - 1 + activeFilteredSkills.length) % activeFilteredSkills.length;
+                updateActiveItem();
+                scrollActiveIntoView();
+            } else if (e.key === 'Enter' || e.key === 'Tab') {
+                e.preventDefault();
+                if (activeFilteredSkills[selectedIndex]) {
+                    acceptSuggestion(activeFilteredSkills[selectedIndex]);
+                }
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                closeSuggestion();
+            }
+        });
+
+        document.addEventListener('click', function (e) {
+            if (isSuggestionOpen && !suggestionBox.contains(e.target) && e.target !== instructionsTextarea) {
+                closeSuggestion();
+            }
+        });
+    }
 });
 </script>
 @endpush

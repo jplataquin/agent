@@ -61,12 +61,21 @@ class SkillEditorLayoutTest extends TestCase
         $response->assertSee('id="skillInstructions"', false);
         $response->assertSee('id="mcpTreeSearch"', false);
         $response->assertSee('setPointerCapture', false);
+        $response->assertSee('skillSuggestionBox', false);
     }
 
     public function test_admin_edit_skill_page_has_two_pane_layout_and_mcp_explorer(): void
     {
         $admin = User::factory()->create([
             'role' => User::ROLE_ADMIN,
+        ]);
+
+        Skill::create([
+            'name' => 'Helper Skill',
+            'slug' => 'helper-skill',
+            'description' => 'Helpful routines.',
+            'instructions' => 'Helper routines.',
+            'is_active' => true,
         ]);
 
         $skill = Skill::create([
@@ -95,6 +104,8 @@ class SkillEditorLayoutTest extends TestCase
         $response->assertSee('id="skillInstructions"', false);
         $response->assertSee('id="mcpTreeSearch"', false);
         $response->assertSee('setPointerCapture', false);
+        $response->assertSee('skillSuggestionBox', false);
+        $response->assertSee('helper-skill', false);
     }
 
     public function test_mcp_explorer_displays_servers_and_tools(): void

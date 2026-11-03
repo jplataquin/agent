@@ -117,7 +117,7 @@
     </div>
 </div>
 
-@include('admin.skills._editor_scripts')
+@include('admin.skills._editor_scripts', ['availableSkills' => $availableSkills ?? []])
 @endsection
 
 @push('scripts')

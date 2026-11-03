@@ -138,8 +138,9 @@ MSG;
     {
         $groupedTools = $this->getGroupedTools($mcpService);
         $serversMap = McpServer::where('is_active', true)->get()->keyBy('name');
+        $availableSkills = Skill::select('id', 'name', 'slug', 'description')->orderBy('name')->get();
 
-        return view('admin.skills.create', compact('groupedTools', 'serversMap'));
+        return view('admin.skills.create', compact('groupedTools', 'serversMap', 'availableSkills'));
     }
 
     public function store(Request $request)
@@ -164,8 +165,12 @@ MSG;
     {
         $groupedTools = $this->getGroupedTools($mcpService);
         $serversMap = McpServer::where('is_active', true)->get()->keyBy('name');
+        $availableSkills = Skill::where('id', '!=', $skill->id)
+            ->select('id', 'name', 'slug', 'description')
+            ->orderBy('name')
+            ->get();
 
-        return view('admin.skills.edit', compact('skill', 'groupedTools', 'serversMap'));
+        return view('admin.skills.edit', compact('skill', 'groupedTools', 'serversMap', 'availableSkills'));
     }
 
     protected function getGroupedTools(McpService $mcpService)
