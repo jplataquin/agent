@@ -150,6 +150,23 @@
     background: transparent;
     padding: 0;
 }
+
+/* Sync Spinner & Notification */
+@keyframes spin {
+    100% { transform: rotate(360deg); }
+}
+.spin {
+    display: inline-block;
+    animation: spin 0.8s linear infinite;
+}
+.mcp-toast-notify {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 1090;
+    max-width: 380px;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
 </style>
 @endpush
 
@@ -297,93 +314,222 @@ document.addEventListener('DOMContentLoaded', function () {
         textarea.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
-    // --- 3. MCP Insert & Copy Tool Listeners ---
-    document.querySelectorAll('.insert-tool-btn').forEach(btn => {
-        btn.addEventListener('click', function () {
-            const toolName = this.dataset.toolName;
-            const toolDesc = this.dataset.toolDesc;
-            if (!toolName) return;
-
-            let insertText = '';
-            if (instructionsTextarea) {
-                const currentVal = instructionsTextarea.value.trim();
-                const prefix = currentVal.length > 0 && !instructionsTextarea.value.endsWith('\n') ? '\n' : '';
-                insertText = `${prefix}- Use \`${toolName}\` ${toolDesc ? 'to ' + toolDesc.toLowerCase() : ''}\n`;
-                insertAtCursor(instructionsTextarea, insertText);
-            }
-
-            const originalHTML = this.innerHTML;
-            this.innerHTML = '<i class="bi bi-check2 me-1"></i>Added';
-            this.classList.remove('btn-outline-primary');
-            this.classList.add('btn-success');
-            setTimeout(() => {
-                this.innerHTML = originalHTML;
-                this.classList.remove('btn-success');
-                this.classList.add('btn-outline-primary');
-            }, 1200);
-        });
-    });
-
-    document.querySelectorAll('.copy-tool-btn').forEach(btn => {
-        btn.addEventListener('click', function () {
-            const toolName = this.dataset.toolName;
-            if (!toolName) return;
-
-            navigator.clipboard.writeText(toolName).then(() => {
-                const originalHTML = this.innerHTML;
-                this.innerHTML = '<i class="bi bi-check2 text-success"></i>';
-                setTimeout(() => {
-                    this.innerHTML = originalHTML;
-                }, 1200);
-            }).catch(err => {
-                console.error('Failed to copy tool name:', err);
-            });
-        });
-    });
+    // --- 3. Notification Helper ---
+    function showMcpNotification(msg, type = 'success') {
+        let toast = document.getElementById('mcpQuickToast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'mcpQuickToast';
+            toast.className = 'mcp-toast-notify alert shadow-sm d-flex align-items-center gap-2 py-2 px-3';
+            document.body.appendChild(toast);
+        }
+        toast.className = `mcp-toast-notify alert alert-${type} shadow-sm d-flex align-items-center gap-2 py-2 px-3`;
+        toast.innerHTML = `<i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-triangle'}-fill"></i> <span>${msg}</span>`;
+        toast.style.display = 'flex';
+        toast.style.opacity = '1';
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            setTimeout(() => { toast.style.display = 'none'; }, 300);
+        }, 3500);
+    }
 
     // --- 4. MCP Explorer Tree Search / Filter ---
+    function applySearchFilter() {
+        const searchInput = document.getElementById('mcpTreeSearch');
+        if (!searchInput) return;
+        const q = searchInput.value.trim().toLowerCase();
+        const serverNodes = document.querySelectorAll('.mcp-server-node');
+
+        serverNodes.forEach(serverNode => {
+            const serverName = serverNode.dataset.serverName || '';
+            const toolNodes = serverNode.querySelectorAll('.mcp-tool-node');
+            let serverHasMatch = serverName.includes(q);
+            let matchedToolsCount = 0;
+
+            toolNodes.forEach(toolNode => {
+                const toolName = toolNode.dataset.toolName || '';
+                const toolDesc = toolNode.dataset.toolDesc || '';
+                const toolMatches = q === '' || serverHasMatch || toolName.includes(q) || toolDesc.includes(q);
+
+                if (toolMatches) {
+                    toolNode.classList.remove('d-none');
+                    matchedToolsCount++;
+                } else {
+                    toolNode.classList.add('d-none');
+                }
+            });
+
+            if (q === '' || serverHasMatch || matchedToolsCount > 0) {
+                serverNode.classList.remove('d-none');
+                if (q !== '') {
+                    const collapseEl = serverNode.querySelector('.accordion-collapse');
+                    if (collapseEl && !collapseEl.classList.contains('show')) {
+                        const bsCollapse = bootstrap.Collapse.getOrCreateInstance(collapseEl);
+                        bsCollapse.show();
+                    }
+                }
+            } else {
+                serverNode.classList.add('d-none');
+            }
+        });
+    }
+
     const searchInput = document.getElementById('mcpTreeSearch');
     if (searchInput) {
-        searchInput.addEventListener('input', function () {
-            const q = this.value.trim().toLowerCase();
-            const serverNodes = document.querySelectorAll('.mcp-server-node');
+        searchInput.addEventListener('input', applySearchFilter);
+    }
 
-            serverNodes.forEach(serverNode => {
-                const serverName = serverNode.dataset.serverName || '';
-                const toolNodes = serverNode.querySelectorAll('.mcp-tool-node');
-                let serverHasMatch = serverName.includes(q);
-                let matchedToolsCount = 0;
+    // --- 5. Attach Dynamic Listeners to Tree Elements ---
+    function attachMcpTreeListeners() {
+        // Insert tool button
+        document.querySelectorAll('.insert-tool-btn').forEach(btn => {
+            btn.onclick = function () {
+                const toolName = this.dataset.toolName;
+                const toolDesc = this.dataset.toolDesc;
+                if (!toolName) return;
 
-                toolNodes.forEach(toolNode => {
-                    const toolName = toolNode.dataset.toolName || '';
-                    const toolDesc = toolNode.dataset.toolDesc || '';
-                    const toolMatches = q === '' || serverHasMatch || toolName.includes(q) || toolDesc.includes(q);
-
-                    if (toolMatches) {
-                        toolNode.classList.remove('d-none');
-                        matchedToolsCount++;
-                    } else {
-                        toolNode.classList.add('d-none');
-                    }
-                });
-
-                if (q === '' || serverHasMatch || matchedToolsCount > 0) {
-                    serverNode.classList.remove('d-none');
-                    if (q !== '') {
-                        const collapseEl = serverNode.querySelector('.accordion-collapse');
-                        if (collapseEl && !collapseEl.classList.contains('show')) {
-                            const bsCollapse = bootstrap.Collapse.getOrCreateInstance(collapseEl);
-                            bsCollapse.show();
-                        }
-                    }
-                } else {
-                    serverNode.classList.add('d-none');
+                let insertText = '';
+                if (instructionsTextarea) {
+                    const currentVal = instructionsTextarea.value.trim();
+                    const prefix = currentVal.length > 0 && !instructionsTextarea.value.endsWith('\n') ? '\n' : '';
+                    insertText = `${prefix}- Use \`${toolName}\` ${toolDesc ? 'to ' + toolDesc.toLowerCase() : ''}\n`;
+                    insertAtCursor(instructionsTextarea, insertText);
                 }
+
+                const originalHTML = this.innerHTML;
+                this.innerHTML = '<i class="bi bi-check2 me-1"></i>Added';
+                this.classList.remove('btn-outline-primary');
+                this.classList.add('btn-success');
+                setTimeout(() => {
+                    this.innerHTML = originalHTML;
+                    this.classList.remove('btn-success');
+                    this.classList.add('btn-outline-primary');
+                }, 1200);
+            };
+        });
+
+        // Copy tool button
+        document.querySelectorAll('.copy-tool-btn').forEach(btn => {
+            btn.onclick = function () {
+                const toolName = this.dataset.toolName;
+                if (!toolName) return;
+
+                navigator.clipboard.writeText(toolName).then(() => {
+                    const originalHTML = this.innerHTML;
+                    this.innerHTML = '<i class="bi bi-check2 text-success"></i>';
+                    setTimeout(() => {
+                        this.innerHTML = originalHTML;
+                    }, 1200);
+                }).catch(err => {
+                    console.error('Failed to copy tool name:', err);
+                });
+            };
+        });
+
+        // Single Server Sync Button
+        document.querySelectorAll('.sync-single-server-btn').forEach(btn => {
+            btn.onclick = function (e) {
+                e.stopPropagation();
+                const serverName = this.dataset.serverName || 'Server';
+                const syncUrl = this.dataset.syncUrl;
+                if (!syncUrl) return;
+
+                const icon = this.querySelector('i');
+                const textSpan = this.querySelector('.btn-text');
+                const originalText = textSpan ? textSpan.textContent : '';
+                this.disabled = true;
+                if (icon) icon.classList.add('spin');
+                if (textSpan) textSpan.textContent = 'Syncing...';
+
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+                fetch(syncUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken || ''
+                    }
+                })
+                .then(res => res.json())
+                .then(data => {
+                    // Fetch updated tree
+                    return fetch('{{ route('admin.skills.mcp-tree') }}', {
+                        headers: { 'Accept': 'application/json' }
+                    })
+                    .then(r => r.json())
+                    .then(treeData => {
+                        const container = document.getElementById('mcpTreeContainer');
+                        if (container && treeData.html) {
+                            container.innerHTML = treeData.html;
+                            const badge = document.getElementById('mcpTotalToolsBadge');
+                            if (badge) badge.textContent = treeData.total_tools + ' Tools';
+                            attachMcpTreeListeners();
+                            applySearchFilter();
+                        }
+                        showMcpNotification(data.message || `Synced ${serverName} successfully.`, data.success ? 'success' : 'warning');
+                    });
+                })
+                .catch(err => {
+                    console.error('Failed to sync server:', err);
+                    this.disabled = false;
+                    if (icon) icon.classList.remove('spin');
+                    if (textSpan) textSpan.textContent = originalText;
+                    showMcpNotification(`Failed to sync ${serverName}: ${err.message}`, 'danger');
+                });
+            };
+        });
+    }
+
+    // Initial listener attachment
+    attachMcpTreeListeners();
+
+    // --- 6. Sync All MCP Servers Button ---
+    const syncAllBtn = document.getElementById('mcpSyncAllBtn');
+    if (syncAllBtn) {
+        syncAllBtn.addEventListener('click', function () {
+            const icon = this.querySelector('i');
+            const textSpan = this.querySelector('.btn-text');
+            this.disabled = true;
+            if (icon) icon.classList.add('spin');
+            if (textSpan) textSpan.textContent = 'Syncing...';
+
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+            fetch('{{ route('admin.skills.sync-all-mcp') }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken || ''
+                }
+            })
+            .then(res => res.json())
+            .then(data => {
+                this.disabled = false;
+                if (icon) icon.classList.remove('spin');
+                if (textSpan) textSpan.textContent = 'Sync All';
+
+                const container = document.getElementById('mcpTreeContainer');
+                if (container && data.html) {
+                    container.innerHTML = data.html;
+                    const badge = document.getElementById('mcpTotalToolsBadge');
+                    if (badge) badge.textContent = data.total_tools + ' Tools';
+                    attachMcpTreeListeners();
+                    applySearchFilter();
+                }
+                showMcpNotification(data.message || 'All MCP servers synced successfully.', data.success ? 'success' : 'warning');
+            })
+            .catch(err => {
+                this.disabled = false;
+                if (icon) icon.classList.remove('spin');
+                if (textSpan) textSpan.textContent = 'Sync All';
+                showMcpNotification(`Sync failed: ${err.message}`, 'danger');
             });
         });
     }
 
-    // --- 5. Expand All / Collapse All ---
+    // --- 7. Expand All / Collapse All ---
     const expandAllBtn = document.getElementById('mcpExpandAllBtn');
     const collapseAllBtn = document.getElementById('mcpCollapseAllBtn');
 
@@ -405,7 +551,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // --- 6. Rendered Markdown Preview Tab ---
+    // --- 8. Rendered Markdown Preview Tab ---
     const previewTabBtn = document.getElementById('preview-tab');
     const previewContainer = document.getElementById('renderedMarkdownContent');
     const previewLoading = document.getElementById('previewLoading');

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\LlmProvider;
 use App\Models\MasterPrompt;
+use App\Models\McpServer;
 use App\Models\Skill;
 use App\Services\Llm\LlmAdapterFactory;
 use App\Services\McpService;
@@ -136,8 +137,9 @@ MSG;
     public function create(McpService $mcpService)
     {
         $groupedTools = $this->getGroupedTools($mcpService);
+        $serversMap = McpServer::where('is_active', true)->get()->keyBy('name');
 
-        return view('admin.skills.create', compact('groupedTools'));
+        return view('admin.skills.create', compact('groupedTools', 'serversMap'));
     }
 
     public function store(Request $request)
@@ -161,21 +163,94 @@ MSG;
     public function edit(Skill $skill, McpService $mcpService)
     {
         $groupedTools = $this->getGroupedTools($mcpService);
+        $serversMap = McpServer::where('is_active', true)->get()->keyBy('name');
 
-        return view('admin.skills.edit', compact('skill', 'groupedTools'));
+        return view('admin.skills.edit', compact('skill', 'groupedTools', 'serversMap'));
     }
 
     protected function getGroupedTools(McpService $mcpService)
     {
         $tools = $mcpService->getAllActiveTools();
 
-        return collect($tools)->groupBy(function ($tool) {
+        $grouped = collect($tools)->groupBy(function ($tool) {
             if (preg_match('/\(Provided by (.*?)\)$/', $tool['function']['description'] ?? '', $matches)) {
                 return $matches[1];
             }
 
             return ! empty($tool['is_internal']) ? 'Internal Tools (Native)' : 'External MCP Tools';
         });
+
+        // Ensure active MCP servers without cached tools appear in the tree
+        $servers = McpServer::where('is_active', true)->get();
+        foreach ($servers as $server) {
+            if (! $grouped->has($server->name)) {
+                $grouped->put($server->name, collect([]));
+            }
+        }
+
+        return $grouped;
+    }
+
+    /**
+     * Return rendered HTML for the MCP Explorer tree (for dynamic live refresh).
+     */
+    public function mcpTree(McpService $mcpService)
+    {
+        $groupedTools = $this->getGroupedTools($mcpService);
+        $serversMap = McpServer::where('is_active', true)->get()->keyBy('name');
+
+        $totalTools = 0;
+        foreach ($groupedTools as $tools) {
+            $totalTools += count($tools);
+        }
+
+        $html = view('admin.skills._mcp_tree', compact('groupedTools', 'serversMap'))->render();
+
+        return response()->json([
+            'success' => true,
+            'total_tools' => $totalTools,
+            'html' => $html,
+        ]);
+    }
+
+    /**
+     * Sync all active MCP servers and return the updated tree HTML.
+     */
+    public function syncAllMcp(McpService $mcpService)
+    {
+        $servers = McpServer::where('is_active', true)->get();
+        $syncedCount = 0;
+        $totalTools = 0;
+        $errors = [];
+
+        foreach ($servers as $server) {
+            $res = $mcpService->syncTools($server);
+            if ($res['success']) {
+                $syncedCount++;
+                $totalTools += $res['count'] ?? 0;
+            } else {
+                $errors[] = "{$server->name}: ".($res['error'] ?? 'Unknown error');
+            }
+        }
+
+        $groupedTools = $this->getGroupedTools($mcpService);
+        $serversMap = McpServer::where('is_active', true)->get()->keyBy('name');
+
+        $calcTotalTools = 0;
+        foreach ($groupedTools as $tools) {
+            $calcTotalTools += count($tools);
+        }
+
+        $html = view('admin.skills._mcp_tree', compact('groupedTools', 'serversMap'))->render();
+
+        return response()->json([
+            'success' => true,
+            'synced_servers' => $syncedCount,
+            'total_tools' => $calcTotalTools,
+            'errors' => $errors,
+            'html' => $html,
+            'message' => "Synced {$syncedCount} ".Str::plural('server', $syncedCount)." ({$calcTotalTools} ".Str::plural('tool', $calcTotalTools).' discovered).',
+        ]);
     }
 
     public function preview(Request $request, Skill $skill)

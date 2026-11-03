@@ -62,6 +62,8 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     // AI Skills Management
     Route::post('skills/doctor', [SkillController::class, 'doctor'])->name('skills.doctor');
     Route::match(['get', 'post'], 'skills/doctor/report', [SkillController::class, 'doctorReport'])->name('skills.doctor.report');
+    Route::get('skills/mcp-tree', [SkillController::class, 'mcpTree'])->name('skills.mcp-tree');
+    Route::post('skills/sync-all-mcp', [SkillController::class, 'syncAllMcp'])->name('skills.sync-all-mcp');
     Route::post('skills/resolve-preview', [SkillController::class, 'resolvePreview'])->name('skills.resolve-preview');
     Route::match(['get', 'post'], 'skills/{skill}/preview', [SkillController::class, 'preview'])->name('skills.preview');
     Route::resource('skills', SkillController::class);

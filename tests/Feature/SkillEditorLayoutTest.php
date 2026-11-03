@@ -145,5 +145,31 @@ class SkillEditorLayoutTest extends TestCase
         $response->assertSee('execute_sql_query');
         $response->assertSee('Executes read-only SQL queries on the data warehouse.');
         $response->assertSee('The SQL statement to execute');
+
+        // Verify Sync buttons in MCP Explorer
+        $response->assertSee('id="mcpSyncAllBtn"', false);
+        $response->assertSee('sync-single-server-btn', false);
+    }
+
+    public function test_mcp_tree_endpoint_returns_json_html(): void
+    {
+        $admin = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+        ]);
+
+        $response = $this->actingAs($admin)->getJson(route('admin.skills.mcp-tree'));
+        $response->assertOk();
+        $response->assertJsonStructure(['success', 'total_tools', 'html']);
+    }
+
+    public function test_sync_all_mcp_endpoint_executes_and_returns_json(): void
+    {
+        $admin = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+        ]);
+
+        $response = $this->actingAs($admin)->postJson(route('admin.skills.sync-all-mcp'));
+        $response->assertOk();
+        $response->assertJsonStructure(['success', 'synced_servers', 'total_tools', 'errors', 'html', 'message']);
     }
 }
