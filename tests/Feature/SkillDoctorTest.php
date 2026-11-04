@@ -48,6 +48,8 @@ class SkillDoctorTest extends TestCase
         $response->assertStatus(200);
         $response->assertSee('Doctor');
         $response->assertSee('doctorModal');
+        $response->assertSee('data-bs-backdrop="static"', false);
+        $response->assertSee('data-bs-keyboard="false"', false);
     }
 
     public function test_non_admin_cannot_access_doctor_endpoint()

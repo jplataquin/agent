@@ -68,14 +68,14 @@
 </div>
 
 <!-- Doctor Modal -->
-<div class="modal fade" id="doctorModal" tabindex="-1" aria-labelledby="doctorModalLabel" aria-hidden="true">
+<div class="modal fade" id="doctorModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="doctorModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header border-bottom">
                 <h5 class="modal-title fw-bold" id="doctorModalLabel">
                     <i class="bi bi-heart-pulse text-danger me-2"></i>System Coherence Doctor
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" title="Close modal"></button>
             </div>
             <div class="modal-body p-4">
                 <div id="doctorLoading" class="text-center py-5">
@@ -97,7 +97,9 @@
                     </button>
                 </div>
                 <div class="d-flex gap-2">
-                    <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill" data-bs-dismiss="modal" title="Close modal">
+                        <i class="bi bi-x-lg me-1"></i> Close
+                    </button>
                     <button type="button" class="btn btn-primary btn-sm rounded-pill px-3" id="doctorRerunBtn">
                         <i class="bi bi-arrow-repeat me-1"></i> Re-run Analysis
                     </button>
