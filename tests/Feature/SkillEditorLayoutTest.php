@@ -115,7 +115,7 @@ class SkillEditorLayoutTest extends TestCase
         ]);
 
         // Create an active custom MCP server with cached tools
-        McpServer::create([
+        $server = McpServer::create([
             'name' => 'Database Query MCP',
             'endpoint_url' => 'http://localhost:3000/sse',
             'auth_type' => 'none',
@@ -157,8 +157,10 @@ class SkillEditorLayoutTest extends TestCase
         $response->assertSee('Executes read-only SQL queries on the data warehouse.');
         $response->assertSee('The SQL statement to execute');
 
-        // Verify Sync button beside server name in node
+        // Verify Sync button beside server name in node and in-place node update logic
         $response->assertSee('sync-single-server-btn', false);
+        $response->assertSee('data-server-id="'.$server->id.'"', false);
+        $response->assertSee('currentNode.replaceWith(updatedNode)', false);
     }
 
     public function test_mcp_tree_endpoint_returns_json_html(): void

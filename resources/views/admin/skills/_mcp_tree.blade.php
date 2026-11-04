@@ -16,13 +16,14 @@
                 $isInternal = !empty($firstTool['is_internal']) || str_contains(strtolower($serverName), 'internal');
                 $server = isset($serversMap) ? ($serversMap[$serverName] ?? null) : null;
                 $serverId = $server?->id ?? ($firstTool['server_id'] ?? null);
+                $collapseId = 'collapseServer_' . ($serverId ?? \Illuminate\Support\Str::slug($serverName, '_'));
             @endphp
-            <div class="border rounded-3 mb-2 mcp-server-node bg-body overflow-hidden" data-server-name="{{ strtolower($serverName) }}">
+            <div class="border rounded-3 mb-2 mcp-server-node bg-body overflow-hidden" data-server-name="{{ strtolower($serverName) }}" data-server-id="{{ $serverId ?? '' }}">
                 <div class="d-flex align-items-center justify-content-between py-2 px-3 bg-body-tertiary cursor-pointer mcp-server-header"
                      data-bs-toggle="collapse"
-                     data-bs-target="#collapseServer{{ $serverIndex }}"
+                     data-bs-target="#{{ $collapseId }}"
                      aria-expanded="true"
-                     aria-controls="collapseServer{{ $serverIndex }}">
+                     aria-controls="{{ $collapseId }}">
                     <div class="d-flex align-items-center gap-2 text-truncate me-2">
                         @if($isInternal)
                             <i class="bi bi-cpu-fill text-info fs-5 flex-shrink-0"></i>
@@ -37,7 +38,7 @@
                                     data-sync-url="{{ route('admin.mcp-servers.sync', $serverId) }}"
                                     title="Sync {{ $serverName }}"
                                     style="width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center;"
-                                    onclick="event.stopPropagation();">
+                                    onclick="event.preventDefault(); event.stopPropagation();">
                                 <i class="bi bi-arrow-repeat" style="font-size: 0.75rem;"></i>
                             </button>
                         @endif
@@ -50,7 +51,7 @@
                     </div>
                 </div>
 
-                <div id="collapseServer{{ $serverIndex }}" class="accordion-collapse collapse show">
+                <div id="{{ $collapseId }}" class="accordion-collapse collapse show">
                     <div class="p-2 pt-1">
                         @if(count($tools) === 0)
                             <div class="p-3 text-center text-body-secondary small bg-body-tertiary rounded-2 my-1">

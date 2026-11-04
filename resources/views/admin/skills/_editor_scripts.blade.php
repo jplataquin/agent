@@ -387,10 +387,12 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // --- 5. Attach Dynamic Listeners to Tree Elements ---
-    function attachMcpTreeListeners() {
+    function attachMcpTreeListeners(root = document) {
         // Insert tool button
-        document.querySelectorAll('.insert-tool-btn').forEach(btn => {
-            btn.onclick = function () {
+        root.querySelectorAll('.insert-tool-btn').forEach(btn => {
+            btn.onclick = function (e) {
+                e.preventDefault();
+                e.stopPropagation();
                 const toolName = this.dataset.toolName;
                 const toolDesc = this.dataset.toolDesc;
                 if (!toolName) return;
@@ -416,8 +418,10 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         // Copy tool button
-        document.querySelectorAll('.copy-tool-btn').forEach(btn => {
-            btn.onclick = function () {
+        root.querySelectorAll('.copy-tool-btn').forEach(btn => {
+            btn.onclick = function (e) {
+                e.preventDefault();
+                e.stopPropagation();
                 const toolName = this.dataset.toolName;
                 if (!toolName) return;
 
@@ -434,9 +438,11 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         // Single Server Sync Button (Beside server name in node)
-        document.querySelectorAll('.sync-single-server-btn').forEach(btn => {
+        root.querySelectorAll('.sync-single-server-btn').forEach(btn => {
             btn.onclick = function (e) {
+                e.preventDefault();
                 e.stopPropagation();
+                const serverId = this.dataset.serverId;
                 const serverName = this.dataset.serverName || 'Server';
                 const syncUrl = this.dataset.syncUrl;
                 if (!syncUrl) return;
@@ -446,6 +452,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (icon) icon.classList.add('spin');
 
                 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                const currentNode = this.closest('.mcp-server-node');
 
                 fetch(syncUrl, {
                     method: 'POST',
@@ -463,11 +470,54 @@ document.addEventListener('DOMContentLoaded', function () {
                     .then(r => r.json())
                     .then(treeData => {
                         const container = document.getElementById('mcpTreeContainer');
-                        if (container && treeData.html) {
-                            container.innerHTML = treeData.html;
+                        if (treeData && treeData.html) {
+                            // Target ONLY this server node in the tree without refreshing the whole tree/page
+                            const parser = new DOMParser();
+                            const doc = parser.parseFromString(treeData.html, 'text/html');
+
+                            let updatedNode = null;
+                            if (serverId) {
+                                updatedNode = doc.querySelector(`.mcp-server-node[data-server-id="${serverId}"]`);
+                            }
+                            if (!updatedNode) {
+                                const nodes = doc.querySelectorAll('.mcp-server-node');
+                                for (const n of nodes) {
+                                    if (n.dataset.serverName === serverName.toLowerCase()) {
+                                        updatedNode = n;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if (currentNode && updatedNode) {
+                                // Preserve open state of accordion
+                                const currentCollapse = currentNode.querySelector('.accordion-collapse');
+                                const wasOpen = currentCollapse ? (currentCollapse.classList.contains('show') || currentCollapse.getAttribute('aria-expanded') === 'true') : true;
+
+                                currentNode.replaceWith(updatedNode);
+
+                                const newCollapse = updatedNode.querySelector('.accordion-collapse');
+                                if (newCollapse) {
+                                    if (wasOpen || (data && data.count > 0)) {
+                                        newCollapse.classList.add('show');
+                                        const arrow = updatedNode.querySelector('.accordion-arrow-icon');
+                                        if (arrow) arrow.style.transform = 'rotate(0deg)';
+                                    }
+                                }
+
+                                attachMcpTreeListeners(updatedNode);
+                            } else if (container) {
+                                // Fallback: replace container if specific node could not be matched
+                                container.innerHTML = treeData.html;
+                                attachMcpTreeListeners(container);
+                            }
+
+                            // Update global total tools badge
                             const badge = document.getElementById('mcpTotalToolsBadge');
-                            if (badge) badge.textContent = treeData.total_tools + ' Tools';
-                            attachMcpTreeListeners();
+                            if (badge && treeData.total_tools !== undefined) {
+                                badge.textContent = treeData.total_tools + ' Tools';
+                            }
+
                             applySearchFilter();
                         }
                         showMcpNotification(data.message || `Synced ${serverName} successfully.`, data.success ? 'success' : 'warning');

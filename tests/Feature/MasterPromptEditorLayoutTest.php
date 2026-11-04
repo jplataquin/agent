@@ -119,7 +119,7 @@ class MasterPromptEditorLayoutTest extends TestCase
             'role' => User::ROLE_ADMIN,
         ]);
 
-        McpServer::create([
+        $server = McpServer::create([
             'name' => 'Inventory System MCP',
             'endpoint_url' => 'http://localhost:3000/sse',
             'auth_type' => 'none',
@@ -160,8 +160,10 @@ class MasterPromptEditorLayoutTest extends TestCase
         $response->assertSee('Checks current warehouse item stock levels.');
         $response->assertSee('Product SKU code');
 
-        // Verify Sync button beside server name in node
+        // Verify Sync button beside server name in node and in-place node update logic
         $response->assertSee('sync-single-server-btn', false);
+        $response->assertSee('data-server-id="'.$server->id.'"', false);
+        $response->assertSee('currentNode.replaceWith(updatedNode)', false);
     }
 
     public function test_master_prompt_mcp_tree_endpoint_returns_json_html(): void
