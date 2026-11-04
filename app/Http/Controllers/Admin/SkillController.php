@@ -7,6 +7,7 @@ use App\Models\LlmProvider;
 use App\Models\MasterPrompt;
 use App\Models\McpServer;
 use App\Models\Skill;
+use App\Models\SkillCategory;
 use App\Services\Llm\LlmAdapterFactory;
 use App\Services\McpService;
 use Illuminate\Http\Request;
@@ -127,25 +128,44 @@ MSG;
         return view('admin.skills.doctor_report', compact('report', 'provider'));
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        $skills = Skill::latest()->paginate(15);
+        $categories = SkillCategory::withCount('skills')->orderBy('name')->get();
+        $uncategorizedCount = Skill::whereNull('category_id')->count();
+        $totalSkillsCount = Skill::count();
 
-        return view('admin.skills.index', compact('skills'));
+        $query = Skill::with('category')->latest();
+
+        if ($request->filled('category')) {
+            $catSlug = $request->query('category');
+            if ($catSlug === 'uncategorized') {
+                $query->whereNull('category_id');
+            } else {
+                $query->whereHas('category', function ($q) use ($catSlug) {
+                    $q->where('slug', $catSlug);
+                });
+            }
+        }
+
+        $skills = $query->paginate(15)->withQueryString();
+
+        return view('admin.skills.index', compact('skills', 'categories', 'totalSkillsCount', 'uncategorizedCount'));
     }
 
     public function create(McpService $mcpService)
     {
+        $categories = SkillCategory::orderBy('name')->get();
         $groupedTools = $this->getGroupedTools($mcpService);
         $serversMap = McpServer::where('is_active', true)->get()->keyBy('name');
         $availableSkills = Skill::select('id', 'name', 'slug', 'description')->orderBy('name')->get();
 
-        return view('admin.skills.create', compact('groupedTools', 'serversMap', 'availableSkills'));
+        return view('admin.skills.create', compact('categories', 'groupedTools', 'serversMap', 'availableSkills'));
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
+            'category_id' => 'nullable|exists:skill_categories,id',
             'name' => 'required|string|max:255',
             'slug' => 'nullable|string|max:255|unique:skills',
             'description' => 'nullable|string',
@@ -163,6 +183,7 @@ MSG;
 
     public function edit(Skill $skill, McpService $mcpService)
     {
+        $categories = SkillCategory::orderBy('name')->get();
         $groupedTools = $this->getGroupedTools($mcpService);
         $serversMap = McpServer::where('is_active', true)->get()->keyBy('name');
         $availableSkills = Skill::where('id', '!=', $skill->id)
@@ -170,7 +191,7 @@ MSG;
             ->orderBy('name')
             ->get();
 
-        return view('admin.skills.edit', compact('skill', 'groupedTools', 'serversMap', 'availableSkills'));
+        return view('admin.skills.edit', compact('skill', 'categories', 'groupedTools', 'serversMap', 'availableSkills'));
     }
 
     protected function getGroupedTools(McpService $mcpService)
@@ -297,6 +318,7 @@ MSG;
     public function update(Request $request, Skill $skill)
     {
         $validated = $request->validate([
+            'category_id' => 'nullable|exists:skill_categories,id',
             'name' => 'required|string|max:255',
             'slug' => ['required', 'string', 'max:255', Rule::unique('skills')->ignore($skill->id)],
             'description' => 'nullable|string',

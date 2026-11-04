@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\LlmProviderController;
 use App\Http\Controllers\Admin\MasterPromptController;
 use App\Http\Controllers\Admin\McpDiagnosticsController;
 use App\Http\Controllers\Admin\McpServerController;
+use App\Http\Controllers\Admin\SkillCategoryController;
 use App\Http\Controllers\Admin\SkillController;
 use App\Http\Controllers\Admin\TokenMetricController;
 use App\Http\Controllers\Admin\UserChatController;
@@ -68,6 +69,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::match(['get', 'post'], 'skills/{skill}/preview', [SkillController::class, 'preview'])->name('skills.preview');
     Route::resource('skills', SkillController::class);
     Route::post('skills/{skill}/toggle', [SkillController::class, 'toggle'])->name('skills.toggle');
+
+    // Skill Categories Management
+    Route::resource('skill-categories', SkillCategoryController::class)->except(['create', 'show', 'edit']);
 
     // HTTP MCP Servers Management
     Route::resource('mcp-servers', McpServerController::class);

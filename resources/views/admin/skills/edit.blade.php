@@ -45,13 +45,26 @@
                                 @csrf
                                 @method('PUT')
                                 <div class="row g-3 mb-3">
-                                    <div class="col-md-6">
+                                    <div class="col-md-5">
                                         <label class="form-label fw-semibold">Skill Name</label>
                                         <input type="text" name="name" class="form-control @error('name') is-invalid @enderror" value="{{ old('name', $skill->name) }}" required>
                                         @error('name') <div class="invalid-feedback">{{ $message }}</div> @enderror
                                     </div>
 
-                                    <div class="col-md-6">
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-semibold">Category <small class="text-muted fw-normal">(Optional)</small></label>
+                                        <select name="category_id" class="form-select @error('category_id') is-invalid @enderror">
+                                            <option value="">-- No Category (General) --</option>
+                                            @foreach($categories as $category)
+                                                <option value="{{ $category->id }}" {{ (string) old('category_id', $skill->category_id) === (string) $category->id ? 'selected' : '' }}>
+                                                    {{ $category->name }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                        @error('category_id') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                                    </div>
+
+                                    <div class="col-md-3">
                                         <label class="form-label fw-semibold">Slug</label>
                                         <input type="text" name="slug" class="form-control @error('slug') is-invalid @enderror" value="{{ old('slug', $skill->slug) }}" required>
                                         @error('slug') <div class="invalid-feedback">{{ $message }}</div> @enderror
