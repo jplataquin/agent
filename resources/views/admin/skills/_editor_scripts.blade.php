@@ -171,6 +171,13 @@
 @endpush
 
 @push('scripts')
+@php
+    $textareaId = $textareaId ?? 'skillInstructions';
+    $formId = $formId ?? 'skillForm';
+    $resolvePreviewUrl = $resolvePreviewUrl ?? route('admin.skills.resolve-preview');
+    $mcpTreeUrl = $mcpTreeUrl ?? route('admin.skills.mcp-tree');
+    $storageKey = $storageKey ?? 'skills_editor_left_width';
+@endphp
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     // --- 1. Resizer Logic (Pointer & Mouse with 1:1 Direct Tracking) ---
@@ -296,7 +303,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // --- 2. Instructions Textarea Cursor Insert Helper ---
-    const instructionsTextarea = document.getElementById('skillInstructions');
+    const instructionsTextarea = document.getElementById('{{ $textareaId }}') || document.getElementById('skillInstructions') || document.getElementById('masterPromptContent') || document.querySelector('textarea[name="instructions"], textarea[name="content"]');
 
     function insertAtCursor(textarea, textToInsert) {
         if (!textarea) return;
@@ -450,7 +457,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 })
                 .then(res => res.json())
                 .then(data => {
-                    return fetch('{{ route('admin.skills.mcp-tree') }}', {
+                    return fetch('{{ $mcpTreeUrl }}', {
                         headers: { 'Accept': 'application/json' }
                     })
                     .then(r => r.json())
@@ -526,12 +533,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (previewTabBtn && previewContainer) {
         previewTabBtn.addEventListener('shown.bs.tab', function () {
-            const form = document.getElementById('skillForm');
+            const form = document.getElementById('{{ $formId }}') || document.getElementById('skillForm') || document.getElementById('masterPromptForm') || document.querySelector('form');
             if (!form) return;
 
-            const name = form.querySelector('[name="name"]')?.value || '';
+            const name = form.querySelector('[name="name"], [name="title"]')?.value || '';
             const description = form.querySelector('[name="description"]')?.value || '';
-            const instructions = form.querySelector('[name="instructions"]')?.value || '';
+            const instructions = form.querySelector('[name="instructions"], [name="content"]')?.value || '';
 
             // Show loading spinner
             previewLoading?.classList.remove('d-none');
@@ -539,7 +546,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
 
-            fetch('{{ route('admin.skills.resolve-preview') }}', {
+            fetch('{{ $resolvePreviewUrl }}', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -548,8 +555,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 },
                 body: JSON.stringify({
                     name: name,
+                    title: name,
                     description: description,
-                    instructions: instructions
+                    instructions: instructions,
+                    content: instructions
                 })
             })
             .then(res => {

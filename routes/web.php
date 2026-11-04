@@ -92,6 +92,10 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('mcp-diagnostics/action', [McpDiagnosticsController::class, 'quickAction'])->name('mcp-diagnostics.action');
 
     // Master Prompts Management
+    Route::get('master-prompts/mcp-tree', [MasterPromptController::class, 'mcpTree'])->name('master-prompts.mcp-tree');
+    Route::post('master-prompts/sync-all-mcp', [MasterPromptController::class, 'syncAllMcp'])->name('master-prompts.sync-all-mcp');
+    Route::post('master-prompts/resolve-preview', [MasterPromptController::class, 'resolvePreview'])->name('master-prompts.resolve-preview');
+    Route::match(['get', 'post'], 'master-prompts/{master_prompt}/preview', [MasterPromptController::class, 'preview'])->name('master-prompts.preview');
     Route::resource('master-prompts', MasterPromptController::class);
     Route::post('master-prompts/{master_prompt}/set-active', [MasterPromptController::class, 'setActive'])->name('master-prompts.set-active');
 

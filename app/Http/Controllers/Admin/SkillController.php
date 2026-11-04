@@ -175,25 +175,7 @@ MSG;
 
     protected function getGroupedTools(McpService $mcpService)
     {
-        $tools = $mcpService->getAllActiveTools();
-
-        $grouped = collect($tools)->groupBy(function ($tool) {
-            if (preg_match('/\(Provided by (.*?)\)$/', $tool['function']['description'] ?? '', $matches)) {
-                return $matches[1];
-            }
-
-            return ! empty($tool['is_internal']) ? 'Internal Tools (Native)' : 'External MCP Tools';
-        });
-
-        // Ensure active MCP servers without cached tools appear in the tree
-        $servers = McpServer::where('is_active', true)->get();
-        foreach ($servers as $server) {
-            if (! $grouped->has($server->name)) {
-                $grouped->put($server->name, collect([]));
-            }
-        }
-
-        return $grouped;
+        return $mcpService->getGroupedTools();
     }
 
     /**

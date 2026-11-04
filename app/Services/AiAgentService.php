@@ -29,7 +29,7 @@ class AiAgentService
         // 1. Master Prompt
         $masterPrompt = MasterPrompt::where('is_active', true)->first();
         if ($masterPrompt) {
-            $promptParts[] = $masterPrompt->content;
+            $promptParts[] = Skill::resolveTemplate($masterPrompt->content);
         } else {
             $promptParts[] = 'You are the Company AI Agent. Assist users with professional, helpful, and accurate answers.';
         }
