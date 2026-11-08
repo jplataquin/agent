@@ -358,6 +358,8 @@ The user is currently chatting on a mobile device{$widthInfo}.
                     : 'The requested tool operations have finished.';
             }
 
+            $content = $this->cleanAssistantReply($content);
+
             $totalPromptTokens += $finalResponse->promptTokens;
             $totalCompletionTokens += $finalResponse->completionTokens;
 

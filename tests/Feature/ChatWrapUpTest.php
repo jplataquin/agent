@@ -154,4 +154,44 @@ class ChatWrapUpTest extends TestCase
         $this->assertEquals('Synthesized response early as requested.', $result['content']);
         $this->assertFalse(Cache::has('chat_wrap_up_' . $session->id));
     }
+
+    public function test_ai_agent_service_cleans_json_in_final_synthesis_response()
+    {
+        $user = User::where('role', User::ROLE_REGULAR)->first();
+        $session = ChatSession::create([
+            'user_id' => $user->id,
+            'title' => 'Agent Session JSON Synthesis',
+        ]);
+
+        $session->messages()->create([
+            'role' => ChatMessage::ROLE_USER,
+            'content' => 'Run the query and summarize.',
+        ]);
+
+        Cache::put('chat_wrap_up_' . $session->id, true);
+
+        $rawJsonPayload = json_encode(['output' => 'Cleaned synthesized output text']);
+
+        $mockAdapter = $this->createMock(LlmAdapterInterface::class);
+        $mockAdapter->expects($this->once())
+            ->method('send')
+            ->willReturn(new LlmResponse(
+                content: $rawJsonPayload,
+                promptTokens: 15,
+                completionTokens: 25
+            ));
+
+        $mockFactory = $this->createMock(LlmAdapterFactory::class);
+        $mockFactory->method('make')->willReturn($mockAdapter);
+
+        $service = new AiAgentService(
+            app(\App\Services\McpService::class),
+            $mockFactory
+        );
+
+        $result = $service->generateResponse($session);
+
+        $this->assertArrayHasKey('content', $result);
+        $this->assertEquals('Cleaned synthesized output text', $result['content']);
+    }
 }
